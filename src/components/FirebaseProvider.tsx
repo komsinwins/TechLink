@@ -1,0 +1,177 @@
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { 
+  User, 
+  onAuthStateChanged, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut 
+} from 'firebase/auth';
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  getDocFromServer 
+} from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
+import { LookupTypes } from '../types';
+
+interface FirebaseContextType {
+  user: User | null;
+  loading: boolean;
+  lookups: LookupTypes;
+  addLookupItem: (category: 'onsiteServiceTypes' | 'oncallProductTypes' | 'claimProductTypes', item: string) => Promise<void>;
+  deleteLookupItem: (category: 'onsiteServiceTypes' | 'oncallProductTypes' | 'claimProductTypes', item: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
+  isOffline: boolean;
+}
+
+const FirebaseContext = createContext<FirebaseContextType | undefined>(undefined);
+
+const defaultLookups: LookupTypes = {
+  onsiteServiceTypes: ["Installation", "Preventive Maintenance", "Hardware Repair", "Software Support", "Network Setup"],
+  oncallProductTypes: ["Server Admin", "Network Switch", "Firewall Policy", "Backup & Restore", "Software License"],
+  claimProductTypes: ["IP Camera", "PoE Switch", "UPS Battery", "Hard Drive", "Network Router"]
+};
+
+export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [lookups, setLookups] = useState<LookupTypes>(defaultLookups);
+  const [isOffline, setIsOffline] = useState(false);
+
+  // Validate Firestore Connection on Boot
+  useEffect(() => {
+    async function testConnection() {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('offline')) {
+          console.warn("Please check your Firebase configuration or connection.");
+          setIsOffline(true);
+        }
+      }
+    }
+    testConnection();
+  }, []);
+
+  // Monitor Authentication
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        // Fetch or initialize customized lookup types
+        try {
+          const docRef = doc(db, 'settings', 'lookups');
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setLookups(docSnap.data() as LookupTypes);
+          } else {
+            // Save defaults if not present
+            await setDoc(docRef, {
+              ...defaultLookups,
+              updatedAt: new Date().toISOString()
+            });
+            setLookups(defaultLookups);
+          }
+        } catch (err) {
+          console.error("Error reading settings doc:", err);
+        }
+      } else {
+        // Reset lookups to default if logged out
+        setLookups(defaultLookups);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const signInWithGoogle = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Error signing in with Google:", error);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+
+  const addLookupItem = async (
+    category: 'onsiteServiceTypes' | 'oncallProductTypes' | 'claimProductTypes',
+    item: string
+  ) => {
+    const trimmed = item.trim();
+    if (!trimmed) return;
+    
+    const updatedValues = [...lookups[category]];
+    if (updatedValues.includes(trimmed)) return;
+    
+    updatedValues.push(trimmed);
+    const newLookups = { ...lookups, [category]: updatedValues };
+    
+    setLookups(newLookups);
+
+    if (user) {
+      try {
+        await setDoc(doc(db, 'settings', 'lookups'), {
+          ...newLookups,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error("Error updating settings doc:", err);
+      }
+    }
+  };
+
+  const deleteLookupItem = async (
+    category: 'onsiteServiceTypes' | 'oncallProductTypes' | 'claimProductTypes',
+    item: string
+  ) => {
+    const updatedValues = lookups[category].filter(v => v !== item);
+    const newLookups = { ...lookups, [category]: updatedValues };
+    
+    setLookups(newLookups);
+
+    if (user) {
+      try {
+        await setDoc(doc(db, 'settings', 'lookups'), {
+          ...newLookups,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error("Error deleting setting item:", err);
+      }
+    }
+  };
+
+  return (
+    <FirebaseContext.Provider value={{
+      user,
+      loading,
+      lookups,
+      addLookupItem,
+      deleteLookupItem,
+      signInWithGoogle,
+      logout,
+      isOffline
+    }}>
+      {children}
+    </FirebaseContext.Provider>
+  );
+};
+
+export const useFirebase = () => {
+  const context = useContext(FirebaseContext);
+  if (context === undefined) {
+    throw new Error('useFirebase must be used within a FirebaseProvider');
+  }
+  return context;
+};

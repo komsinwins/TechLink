@@ -1,0 +1,6 @@
+{
+  "name": "WSS_TechLink V.1.0",
+  "description": "Technical Support Department tracking system for onsite/oncall services and product claims with Firebase backend integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

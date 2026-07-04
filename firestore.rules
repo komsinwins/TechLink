@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net: default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation Blueprints
+    function isValidOnsite(data) {
+      return data.companyName is string && data.companyName.size() <= 200 &&
+             data.status in ['Pending', 'In Progress', 'Completed'] &&
+             (data.get('techName', '') is string && data.get('techName', '').size() <= 100) &&
+             (data.get('salesName', '') is string && data.get('salesName', '').size() <= 100);
+    }
+
+    function isValidOncall(data) {
+      return data.companyName is string && data.companyName.size() <= 200 &&
+             data.status in ['Pending', 'In Progress', 'Completed'] &&
+             (data.get('techName', '') is string && data.get('techName', '').size() <= 100);
+    }
+
+    function isValidClaim(data) {
+      return data.companyName is string && data.companyName.size() <= 200 &&
+             data.productBrand is string && data.productBrand.size() <= 100 &&
+             data.serialNumber is string && data.serialNumber.size() <= 100;
+    }
+
+    function isValidCustomer(data) {
+      return data.companyName is string && data.companyName.size() <= 200;
+    }
+
+    function isValidSetting(data) {
+      return data.values is list && data.values.size() <= 100;
+    }
+
+    // onsite_services
+    match /onsite_services/{id} {
+      allow read: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(id) && isValidOnsite(incoming());
+      allow update: if isEmailVerified() && isValidId(id) && isValidOnsite(incoming());
+      allow delete: if isEmailVerified();
+    }
+
+    // oncall_services
+    match /oncall_services/{id} {
+      allow read: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(id) && isValidOncall(incoming());
+      allow update: if isEmailVerified() && isValidId(id) && isValidOncall(incoming());
+      allow delete: if isEmailVerified();
+    }
+
+    // claims
+    match /claims/{id} {
+      allow read: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(id) && isValidClaim(incoming());
+      allow update: if isEmailVerified() && isValidId(id) && isValidClaim(incoming());
+      allow delete: if isEmailVerified();
+    }
+
+    // customers
+    match /customers/{id} {
+      allow read: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(id) && isValidCustomer(incoming());
+      allow update: if isEmailVerified() && isValidId(id) && isValidCustomer(incoming());
+      allow delete: if isEmailVerified();
+    }
+
+    // settings
+    match /settings/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if isEmailVerified() && isValidId(id) && isValidSetting(incoming());
+      allow delete: if isEmailVerified();
+    }
+  }
+}

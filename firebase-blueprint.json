@@ -1,0 +1,150 @@
+{
+  "entities": {
+    "onsite_service": {
+      "title": "Onsite Service Ticket",
+      "description": "Information about an onsite service job",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyName": { "type": "string" },
+        "companyAddress": { "type": "string" },
+        "contactName": { "type": "string" },
+        "contactDetails": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "partnerCompany": { "type": "string" },
+        "serviceType": { "type": "string" },
+        "onsiteLocation": { "type": "string" },
+        "techName": { "type": "string" },
+        "salesName": { "type": "string" },
+        "assignedDate": { "type": "string" },
+        "actionDate": { "type": "string" },
+        "fixedDate": { "type": "string" },
+        "workingDays": { "type": "number" },
+        "repairDuration": { "type": "number" },
+        "symptomReport": { "type": "string" },
+        "inspectionCause": { "type": "string" },
+        "solution": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "In Progress", "Completed"] },
+        "photos": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["companyName", "assignedDate", "status"]
+    },
+    "oncall_service": {
+      "title": "Oncall Service Ticket",
+      "description": "Information about an oncall service support session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyName": { "type": "string" },
+        "companyAddress": { "type": "string" },
+        "contactName": { "type": "string" },
+        "contactDetails": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "partnerCompany": { "type": "string" },
+        "productType": { "type": "string" },
+        "salesName": { "type": "string" },
+        "assignedDate": { "type": "string" },
+        "fixedDate": { "type": "string" },
+        "repairDuration": { "type": "number" },
+        "techName": { "type": "string" },
+        "symptomReport": { "type": "string" },
+        "solution": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "In Progress", "Completed"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["companyName", "assignedDate", "status"]
+    },
+    "claim": {
+      "title": "Product Claim Ticket",
+      "description": "Information about a product being claimed",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyName": { "type": "string" },
+        "companyAddress": { "type": "string" },
+        "contactName": { "type": "string" },
+        "contactDetails": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "partnerCompany": { "type": "string" },
+        "productType": { "type": "string" },
+        "productBrand": { "type": "string" },
+        "model": { "type": "string" },
+        "serialNumber": { "type": "string" },
+        "purchaseDate": { "type": "string" },
+        "warrantyPeriod": { "type": "string" },
+        "remainingWarranty": { "type": "string" },
+        "claimDestination": { "type": "string" },
+        "claimBuilding": { "type": "string" },
+        "receivedClaimDate": { "type": "string" },
+        "returnedClaimDate": { "type": "string" },
+        "inspectorName": { "type": "string" },
+        "claimStatus": { "type": "string" },
+        "photoBeforeUrl": { "type": "string" },
+        "photoAfterUrl": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["companyName", "productBrand", "serialNumber", "receivedClaimDate", "claimStatus"]
+    },
+    "customer": {
+      "title": "Customer",
+      "description": "Customer record with basic details and contact history summaries",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyName": { "type": "string" },
+        "companyAddress": { "type": "string" },
+        "contactName": { "type": "string" },
+        "contactDetails": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "partnerCompany": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["companyName"]
+    },
+    "setting": {
+      "title": "Setting",
+      "description": "Dynamic configuration list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "values": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["values"]
+    }
+  },
+  "firestore": {
+    "/onsite_services/{id}": {
+      "schema": "onsite_service",
+      "description": "Onsite service tickets"
+    },
+    "/oncall_services/{id}": {
+      "schema": "oncall_service",
+      "description": "Oncall service tickets"
+    },
+    "/claims/{id}": {
+      "schema": "claim",
+      "description": "Product claim tickets"
+    },
+    "/customers/{id}": {
+      "schema": "customer",
+      "description": "Customer contact directory"
+    },
+    "/settings/{id}": {
+      "schema": "setting",
+      "description": "Dynamic lookup types settings (onsite service types, product types, etc.)"
+    }
+  }
+}
