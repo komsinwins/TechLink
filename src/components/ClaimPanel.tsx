@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Claim } from '../types';
 import { useFirebase } from './FirebaseProvider';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -14,10 +14,12 @@ import {
 } from 'firebase/firestore';
 import { 
   Plus, Edit2, Trash2, Clipboard, Calendar, Clock, AlertTriangle, 
-  Search, CheckCircle, X, ChevronRight, User as UserIcon, Tag, Printer, Image as ImageIcon
+  Search, CheckCircle, X, ChevronRight, User as UserIcon, Tag, Printer, Image as ImageIcon,
+  Upload, Download
 } from 'lucide-react';
 import { calculateDaysBetween, calculateRemainingWarranty, isClaimOverdue } from '../utils/date';
 import { techPresetImages } from '../utils/mockImages';
+import { parseCSV, generateCSV, downloadFile } from '../utils/csvHelper';
 
 export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch = '' }) => {
   const { user, lookups, addLookupItem, deleteLookupItem } = useFirebase();
@@ -26,6 +28,151 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
   const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState('All');
   
+  // Custom CSV and Print states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showPrintReportModal, setShowPrintReportModal] = useState(false);
+
+  const claimHeaders = [
+    'Company Name', 'Company Address', 'Contact Name', 'Contact Details', 
+    'Contact Phone', 'Contact Email', 'Partner Company', 'Product Type', 
+    'Product Brand', 'Model', 'Serial Number', 'Purchase Date', 
+    'Warranty Period', 'Claim Destination', 'Claim Building', 
+    'Received Claim Date', 'Returned Claim Date', 'Inspector Name', 
+    'Claim Status', 'Photo Before URL', 'Photo After URL', 'Notes'
+  ];
+  
+  const claimKeys = [
+    'companyName', 'companyAddress', 'contactName', 'contactDetails', 
+    'contactPhone', 'contactEmail', 'partnerCompany', 'productType', 
+    'productBrand', 'model', 'serialNumber', 'purchaseDate', 
+    'warrantyPeriod', 'claimDestination', 'claimBuilding', 
+    'receivedClaimDate', 'returnedClaimDate', 'inspectorName', 
+    'claimStatus', 'photoBeforeUrl', 'photoAfterUrl', 'notes'
+  ];
+
+  const handleExportCSV = () => {
+    const csvContent = generateCSV(claimHeaders, filteredClaims, claimKeys);
+    downloadFile(`claims_report_${new Date().toISOString().split('T')[0]}.csv`, csvContent);
+  };
+
+  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const text = evt.target?.result as string;
+        if (!text) return;
+
+        const rows = parseCSV(text);
+        if (rows.length < 2) {
+          alert("ไฟล์ CSV ไม่มีข้อมูลเพียงพอ");
+          return;
+        }
+
+        const headers = rows[0].map(h => h.trim().toLowerCase());
+        const importedClaims: any[] = [];
+
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (row.length === 0 || (row.length === 1 && row[0] === "")) continue;
+
+          const claim: any = {};
+          const todayStr = new Date().toISOString().split('T')[0];
+          claim.purchaseDate = todayStr;
+          claim.receivedClaimDate = todayStr;
+          claim.returnedClaimDate = todayStr;
+          claim.warrantyPeriod = '1 Year';
+          claim.claimStatus = 'Received';
+          claim.photoBeforeUrl = '';
+          claim.photoAfterUrl = '';
+          claim.createdAt = new Date().toISOString();
+          claim.updatedAt = new Date().toISOString();
+
+          headers.forEach((header, index) => {
+            const val = row[index] || '';
+            if (header === 'company name' || header === 'companyname') claim.companyName = val;
+            else if (header === 'company address' || header === 'companyaddress') claim.companyAddress = val;
+            else if (header === 'contact name' || header === 'contactname') claim.contactName = val;
+            else if (header === 'contact details' || header === 'contactdetails') claim.contactDetails = val;
+            else if (header === 'contact phone' || header === 'contactphone') claim.contactPhone = val;
+            else if (header === 'contact email' || header === 'contactemail') claim.contactEmail = val;
+            else if (header === 'partner company' || header === 'partnercompany') claim.partnerCompany = val;
+            else if (header === 'product type' || header === 'producttype') claim.productType = val;
+            else if (header === 'product brand' || header === 'productbrand') claim.productBrand = val;
+            else if (header === 'model') claim.model = val;
+            else if (header === 'serial number' || header === 'serialnumber') claim.serialNumber = val;
+            else if (header === 'purchase date' || header === 'purchasedate') claim.purchaseDate = val;
+            else if (header === 'warranty period' || header === 'warrantyperiod') claim.warrantyPeriod = val;
+            else if (header === 'claim destination' || header === 'claimdestination') claim.claimDestination = val;
+            else if (header === 'claim building' || header === 'claimbuilding') claim.claimBuilding = val;
+            else if (header === 'received claim date' || header === 'receivedclaimdate') claim.receivedClaimDate = val;
+            else if (header === 'returned claim date' || header === 'returnedclaimdate') claim.returnedClaimDate = val;
+            else if (header === 'inspector name' || header === 'inspectorname') claim.inspectorName = val;
+            else if (header === 'photo before url' || header === 'photobeforeurl') claim.photoBeforeUrl = val;
+            else if (header === 'photo after url' || header === 'photoafterurl') claim.photoAfterUrl = val;
+            else if (header === 'notes') claim.notes = val;
+            else if (header === 'claim status' || header === 'claimstatus') {
+              if (['Received', 'In Inspection', 'Sent to Claim', 'Ready for Return', 'Returned'].includes(val)) {
+                claim.claimStatus = val;
+              }
+            }
+          });
+
+          if (!claim.companyName) continue;
+          importedClaims.push(claim);
+        }
+
+        if (importedClaims.length === 0) {
+          alert("ไม่พบข้อมูลเคลมสินค้าที่ถูกต้องในไฟล์ CSV");
+          return;
+        }
+
+        if (!confirm(`คุณต้องการนำเข้าข้อมูลเคลมสินค้าจำนวน ${importedClaims.length} รายการใช่หรือไม่?`)) {
+          return;
+        }
+
+        const path = 'claims';
+        const customersPath = 'customers';
+
+        for (const claim of importedClaims) {
+          await addDoc(collection(db, path), claim);
+
+          const snapshot = await getDocs(collection(db, customersPath));
+          let exists = false;
+          snapshot.forEach((docSnap) => {
+            if (docSnap.data().companyName.toLowerCase().trim() === claim.companyName.toLowerCase().trim()) {
+              exists = true;
+            }
+          });
+
+          if (!exists) {
+            await addDoc(collection(db, customersPath), {
+              companyName: claim.companyName,
+              companyAddress: claim.companyAddress || '',
+              contactName: claim.contactName || '',
+              contactDetails: claim.contactDetails || '',
+              contactPhone: claim.contactPhone || '',
+              contactEmail: claim.contactEmail || '',
+              partnerCompany: claim.partnerCompany || '',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            });
+          }
+        }
+
+        alert("นำเข้าข้อมูลเสร็จสมบูรณ์!");
+        fetchClaims();
+      } catch (err) {
+        console.error("Error importing CSV:", err);
+        alert("เกิดข้อผิดพลาดในการนำเข้าไฟล์ CSV: " + (err instanceof Error ? err.message : String(err)));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   // Form/Modal state
   const [showFormModal, setShowFormModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -323,13 +470,51 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
           </div>
         </div>
 
-        <button
-          onClick={handleOpenAdd}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-all active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          <span>เพิ่มรายการเคลมสินค้า</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImportCSV}
+            accept=".csv"
+            className="hidden"
+          />
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="นำเข้าไฟล์ CSV สำหรับรายงาน"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5 text-blue-600" />
+            <span>นำเข้า CSV</span>
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            title="ส่งออกรายงาน Excel (.csv)"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600" />
+            <span>ส่งออก CSV</span>
+          </button>
+
+          <button
+            onClick={() => setShowPrintReportModal(true)}
+            title="พิมพ์รายงานรวม PDF"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5 text-indigo-600" />
+            <span>พิมพ์รายงานรวม (PDF)</span>
+          </button>
+
+          <button
+            onClick={handleOpenAdd}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>เพิ่มรายการเคลมสินค้า</span>
+          </button>
+        </div>
       </div>
 
       {/* Claims List Table */}
@@ -929,6 +1114,120 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
                   </p>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =======================================
+          PRINTABLE SUMMARY REPORT DOCUMENT (PDF)
+          ======================================= */}
+      {showPrintReportModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white text-slate-900 rounded-3xl w-full max-w-5xl p-8 max-h-[92vh] overflow-y-auto shadow-2xl relative space-y-6 flex flex-col">
+            
+            {/* Window action buttons (sticky top) */}
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4 shrink-0">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200">
+                รายงานสรุปงานเคลมสินค้าทั้งหมด ({filteredClaims.length} รายการ)
+              </span>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => window.print()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  สั่งพิมพ์ / บันทึก PDF
+                </button>
+                <button
+                  onClick={() => setShowPrintReportModal(false)}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  ปิดหน้าต่าง
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Document Core */}
+            <div id="print-area" className="flex-1 space-y-6 font-sans pr-2 overflow-y-auto">
+              {/* Document Header */}
+              <div className="border-b-4 border-slate-800 pb-5 flex flex-col md:flex-row justify-between items-start gap-4">
+                <div className="space-y-1">
+                  <h1 className="text-2xl font-black text-slate-950 uppercase tracking-tight">
+                    WSS Technical Support Service
+                  </h1>
+                  <p className="text-xs text-slate-500 font-semibold uppercase">ฝ่ายสนับสนุนด้านเทคนิคและซ่อมบำรุงเครือข่าย</p>
+                  <p className="text-xs text-slate-500 font-medium">รายงานสรุปผลการดำเนินงานซ่อมเคลมสินค้า รายคาบ</p>
+                </div>
+                <div className="text-left md:text-right space-y-0.5">
+                  <h2 className="text-xl font-black text-blue-800">รายงาน Claims Service Report</h2>
+                  <p className="text-xs text-slate-500">จำนวนรายการงาน: {filteredClaims.length} เคส</p>
+                  <p className="text-xs text-slate-500">วันที่พิมพ์รายงาน: {new Date().toLocaleDateString('th-TH')}</p>
+                </div>
+              </div>
+
+              {/* Table of Claims */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse border border-slate-300">
+                  <thead>
+                    <tr className="bg-slate-100 text-[11px] font-bold text-slate-700 uppercase">
+                      <th className="border border-slate-300 p-2 text-center">ลำดับ</th>
+                      <th className="border border-slate-300 p-2">บริษัทลูกค้า</th>
+                      <th className="border border-slate-300 p-2">อุปกรณ์ / ยี่ห้อ / รุ่น</th>
+                      <th className="border border-slate-300 p-2">หมายเลขซีเรียล S/N</th>
+                      <th className="border border-slate-300 p-2">ผู้ตรวจสอบ</th>
+                      <th className="border border-slate-300 p-2">วันที่รับเคลม</th>
+                      <th className="border border-slate-300 p-2">ปลายทางส่งเคลม</th>
+                      <th className="border border-slate-300 p-2 text-center">สถานะเคลม</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-[11px] text-slate-800">
+                    {filteredClaims.map((claim, idx) => (
+                      <tr key={claim.id} className="hover:bg-slate-50">
+                        <td className="border border-slate-300 p-2 text-center">{idx + 1}</td>
+                        <td className="border border-slate-300 p-2">
+                          <p className="font-bold text-slate-950">{claim.companyName}</p>
+                          <p className="text-[10px] text-slate-500">ติดต่อ: {claim.contactName || '-'}</p>
+                        </td>
+                        <td className="border border-slate-300 p-2">
+                          <p className="font-semibold text-blue-800">{claim.productType}</p>
+                          <p className="text-slate-600">{claim.productBrand} - {claim.model}</p>
+                        </td>
+                        <td className="border border-slate-300 p-2 font-mono text-[10px]">{claim.serialNumber || '-'}</td>
+                        <td className="border border-slate-300 p-2 font-medium">{claim.inspectorName || '-'}</td>
+                        <td className="border border-slate-300 p-2 whitespace-nowrap">{claim.receivedClaimDate}</td>
+                        <td className="border border-slate-300 p-2">{claim.claimDestination || '-'}</td>
+                        <td className="border border-slate-300 p-2 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                            claim.claimStatus === 'Returned' ? 'bg-emerald-100 text-emerald-800' :
+                            claim.claimStatus === 'Ready for Return' ? 'bg-indigo-100 text-indigo-800' :
+                            claim.claimStatus === 'Sent to Claim' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-800'
+                          }`}>
+                            {claim.claimStatus === 'Received' ? 'รับเคลม' :
+                             claim.claimStatus === 'In Inspection' ? 'ตรวจเช็ค' :
+                             claim.claimStatus === 'Sent to Claim' ? 'ส่งนอก' :
+                             claim.claimStatus === 'Ready for Return' ? 'พร้อมคืน' : 'เสร็จสิ้น'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Signatures */}
+              <div className="pt-12 grid grid-cols-2 gap-12 text-center text-xs">
+                <div className="space-y-16">
+                  <p className="text-slate-500 font-semibold uppercase">ผู้จัดทำรายงาน</p>
+                  <div className="border-b border-slate-300 w-48 mx-auto" />
+                  <p className="text-slate-800 font-bold">({user?.displayName || 'เจ้าหน้าที่ผู้รับผิดชอบ'})</p>
+                </div>
+                <div className="space-y-16">
+                  <p className="text-slate-500 font-semibold uppercase">ผู้อนุมัติรายงาน</p>
+                  <div className="border-b border-slate-300 w-48 mx-auto" />
+                  <p className="text-slate-800 font-bold">(........................................................)</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

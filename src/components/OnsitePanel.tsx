@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { OnsiteService, PhotoItem } from '../types';
 import { useFirebase } from './FirebaseProvider';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -14,10 +14,11 @@ import {
 } from 'firebase/firestore';
 import { 
   Plus, Edit2, Trash2, FileText, Calendar, Clock, AlertTriangle, 
-  Upload, X, Image as ImageIcon, CheckCircle, Search, Printer, User as UserIcon
+  Upload, X, Image as ImageIcon, CheckCircle, Search, Printer, User as UserIcon, Download
 } from 'lucide-react';
 import { calculateDaysBetween, isJobOverdue } from '../utils/date';
 import { techPresetImages } from '../utils/mockImages';
+import { parseCSV, generateCSV, downloadFile } from '../utils/csvHelper';
 
 export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearch = '' }) => {
   const { user, lookups, addLookupItem, deleteLookupItem } = useFirebase();
@@ -26,6 +27,152 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
   const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState('All');
   
+  // Custom CSV Ref and Report States
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showPrintReportModal, setShowPrintReportModal] = useState(false);
+
+  const onsiteHeaders = [
+    'Company Name', 'Company Address', 'Contact Name', 'Contact Details', 
+    'Contact Phone', 'Contact Email', 'Partner Company', 'Service Type', 
+    'Onsite Location', 'Tech Name', 'Sales Name', 'Assigned Date', 
+    'Action Date', 'Fixed Date', 'Symptom Report', 'Inspection Cause', 
+    'Solution', 'Notes', 'Status'
+  ];
+  
+  const onsiteKeys = [
+    'companyName', 'companyAddress', 'contactName', 'contactDetails', 
+    'contactPhone', 'contactEmail', 'partnerCompany', 'serviceType', 
+    'onsiteLocation', 'techName', 'salesName', 'assignedDate', 
+    'actionDate', 'fixedDate', 'symptomReport', 'inspectionCause', 
+    'solution', 'notes', 'status'
+  ];
+
+  const handleExportCSV = () => {
+    const csvContent = generateCSV(onsiteHeaders, filteredJobs, onsiteKeys);
+    downloadFile(`onsite_services_report_${new Date().toISOString().split('T')[0]}.csv`, csvContent);
+  };
+
+  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const text = evt.target?.result as string;
+        if (!text) return;
+        
+        const rows = parseCSV(text);
+        if (rows.length < 2) {
+          alert("ไฟล์ CSV ไม่มีข้อมูลเพียงพอ");
+          return;
+        }
+
+        const headers = rows[0].map(h => h.trim().toLowerCase());
+        const importedJobs: any[] = [];
+
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (row.length === 0 || (row.length === 1 && row[0] === "")) continue;
+
+          const job: any = {};
+          const todayStr = new Date().toISOString().split('T')[0];
+          job.assignedDate = todayStr;
+          job.actionDate = todayStr;
+          job.fixedDate = todayStr;
+          job.status = 'Pending';
+          job.createdAt = new Date().toISOString();
+          job.updatedAt = new Date().toISOString();
+          job.photos = [
+            { url: '', caption: '' },
+            { url: '', caption: '' },
+            { url: '', caption: '' },
+            { url: '', caption: '' },
+          ];
+
+          headers.forEach((header, index) => {
+            const val = row[index] || '';
+            if (header === 'company name' || header === 'companyname') job.companyName = val;
+            else if (header === 'company address' || header === 'companyaddress') job.companyAddress = val;
+            else if (header === 'contact name' || header === 'contactname') job.contactName = val;
+            else if (header === 'contact details' || header === 'contactdetails') job.contactDetails = val;
+            else if (header === 'contact phone' || header === 'contactphone') job.contactPhone = val;
+            else if (header === 'contact email' || header === 'contactemail') job.contactEmail = val;
+            else if (header === 'partner company' || header === 'partnercompany') job.partnerCompany = val;
+            else if (header === 'service type' || header === 'servicetype') job.serviceType = val;
+            else if (header === 'onsite location' || header === 'onsitelocation') job.onsiteLocation = val;
+            else if (header === 'tech name' || header === 'techname') job.techName = val;
+            else if (header === 'sales name' || header === 'salesname') job.salesName = val;
+            else if (header === 'assigned date' || header === 'assigneddate') job.assignedDate = val;
+            else if (header === 'action date' || header === 'actiondate') job.actionDate = val;
+            else if (header === 'fixed date' || header === 'fixeddate') job.fixedDate = val;
+            else if (header === 'symptom report' || header === 'symptomreport') job.symptomReport = val;
+            else if (header === 'inspection cause' || header === 'inspectioncause') job.inspectionCause = val;
+            else if (header === 'solution') job.solution = val;
+            else if (header === 'notes') job.notes = val;
+            else if (header === 'status') {
+              if (['Pending', 'In Progress', 'Completed'].includes(val)) {
+                job.status = val;
+              }
+            }
+          });
+
+          if (!job.companyName) {
+            continue;
+          }
+
+          importedJobs.push(job);
+        }
+
+        if (importedJobs.length === 0) {
+          alert("ไม่พบข้อมูลงาน Onsite Service ที่ถูกต้องในไฟล์ CSV");
+          return;
+        }
+
+        if (!confirm(`คุณต้องการนำเข้าข้อมูลงาน Onsite Service จำนวน ${importedJobs.length} รายการใช่หรือไม่?`)) {
+          return;
+        }
+
+        const path = 'onsite_services';
+        const customersPath = 'customers';
+        
+        for (const job of importedJobs) {
+          await addDoc(collection(db, path), job);
+
+          const snapshot = await getDocs(collection(db, customersPath));
+          let exists = false;
+          snapshot.forEach((docSnap) => {
+            if (docSnap.data().companyName.toLowerCase().trim() === job.companyName.toLowerCase().trim()) {
+              exists = true;
+            }
+          });
+
+          if (!exists) {
+            await addDoc(collection(db, customersPath), {
+              companyName: job.companyName,
+              companyAddress: job.companyAddress || '',
+              contactName: job.contactName || '',
+              contactDetails: job.contactDetails || '',
+              contactPhone: job.contactPhone || '',
+              contactEmail: job.contactEmail || '',
+              partnerCompany: job.partnerCompany || '',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            });
+          }
+        }
+
+        alert("นำเข้าข้อมูลเสร็จสมบูรณ์!");
+        fetchJobs();
+      } catch (err) {
+        console.error("Error importing CSV:", err);
+        alert("เกิดข้อผิดพลาดในการนำเข้าไฟล์ CSV: " + (err instanceof Error ? err.message : String(err)));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   // Form/Modal state
   const [showFormModal, setShowFormModal] = useState(false);
   const [showJobCardModal, setShowJobCardModal] = useState(false);
@@ -367,13 +514,51 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
           </div>
         </div>
 
-        <button
-          onClick={handleOpenAdd}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>เพิ่มงาน Onsite Service</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImportCSV}
+            accept=".csv"
+            className="hidden"
+          />
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="นำเข้าไฟล์ CSV สำหรับรายงาน"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5 text-blue-600" />
+            <span>นำเข้า CSV</span>
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            title="ส่งออกรายงาน Excel (.csv)"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600" />
+            <span>ส่งออก CSV</span>
+          </button>
+
+          <button
+            onClick={() => setShowPrintReportModal(true)}
+            title="พิมพ์รายงานรวม PDF"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5 text-indigo-600" />
+            <span>พิมพ์รายงานรวม (PDF)</span>
+          </button>
+
+          <button
+            onClick={handleOpenAdd}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>เพิ่มงาน Onsite Service</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Table View */}
@@ -974,6 +1159,116 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
       {/* =======================================
           PRINTABLE JOB CARD WORK ORDER DOCUMENT
           ======================================= */}
+      {/* =======================================
+          PRINTABLE SUMMARY REPORT DOCUMENT (PDF)
+          ======================================= */}
+      {showPrintReportModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white text-slate-900 rounded-3xl w-full max-w-5xl p-8 max-h-[92vh] overflow-y-auto shadow-2xl relative space-y-6 flex flex-col">
+            
+            {/* Window action buttons (sticky top) */}
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4 shrink-0">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200">
+                รายงานสรุปงาน Onsite Service ทั้งหมด ({filteredJobs.length} รายการ)
+              </span>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => window.print()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  สั่งพิมพ์ / บันทึก PDF
+                </button>
+                <button
+                  onClick={() => setShowPrintReportModal(false)}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  ปิดหน้าต่าง
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Document Core */}
+            <div id="print-area" className="flex-1 space-y-6 font-sans pr-2 overflow-y-auto">
+              {/* Document Header */}
+              <div className="border-b-4 border-slate-800 pb-5 flex flex-col md:flex-row justify-between items-start gap-4">
+                <div className="space-y-1">
+                  <h1 className="text-2xl font-black text-slate-950 uppercase tracking-tight">
+                    WSS Technical Support Service
+                  </h1>
+                  <p className="text-xs text-slate-500 font-semibold uppercase">ฝ่ายสนับสนุนด้านเทคนิคและซ่อมบำรุงเครือข่าย</p>
+                  <p className="text-xs text-slate-500 font-medium">รายงานสรุปผลการดำเนินงานบริการ Onsite Service รายคาบ</p>
+                </div>
+                <div className="text-left md:text-right space-y-0.5">
+                  <h2 className="text-xl font-black text-blue-800">รายงาน Onsite Service Report</h2>
+                  <p className="text-xs text-slate-500">จำนวนรายการงาน: {filteredJobs.length} เคส</p>
+                  <p className="text-xs text-slate-500">วันที่พิมพ์รายงาน: {new Date().toLocaleDateString('th-TH')}</p>
+                </div>
+              </div>
+
+              {/* Table of Jobs */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse border border-slate-300">
+                  <thead>
+                    <tr className="bg-slate-100 text-[11px] font-bold text-slate-700 uppercase">
+                      <th className="border border-slate-300 p-2 text-center">ลำดับ</th>
+                      <th className="border border-slate-300 p-2">บริษัทลูกค้า</th>
+                      <th className="border border-slate-300 p-2">ประเภทบริการ</th>
+                      <th className="border border-slate-300 p-2">ช่างเทคนิค</th>
+                      <th className="border border-slate-300 p-2">วันที่แจ้ง</th>
+                      <th className="border border-slate-300 p-2">วันที่ปฏิบัติงาน</th>
+                      <th className="border border-slate-300 p-2">อาการที่พบ / วิธีแก้ไข</th>
+                      <th className="border border-slate-300 p-2 text-center">สถานะ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-[11px] text-slate-800">
+                    {filteredJobs.map((job, idx) => (
+                      <tr key={job.id} className="hover:bg-slate-50">
+                        <td className="border border-slate-300 p-2 text-center">{idx + 1}</td>
+                        <td className="border border-slate-300 p-2">
+                          <p className="font-bold text-slate-950">{job.companyName}</p>
+                          <p className="text-[10px] text-slate-500">{job.onsiteLocation}</p>
+                        </td>
+                        <td className="border border-slate-300 p-2 font-semibold text-blue-800">{job.serviceType}</td>
+                        <td className="border border-slate-300 p-2 font-medium">{job.techName || '-'}</td>
+                        <td className="border border-slate-300 p-2 whitespace-nowrap">{job.assignedDate}</td>
+                        <td className="border border-slate-300 p-2 whitespace-nowrap">{job.actionDate}</td>
+                        <td className="border border-slate-300 p-2 max-w-[200px] whitespace-normal">
+                          <p className="font-semibold text-rose-800">อาการ: {job.symptomReport || '-'}</p>
+                          <p className="text-emerald-800 mt-1">วิธีแก้: {job.solution || '-'}</p>
+                        </td>
+                        <td className="border border-slate-300 p-2 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                            job.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' :
+                            job.status === 'In Progress' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-800'
+                          }`}>
+                            {job.status === 'Completed' ? 'เสร็จสิ้น' : job.status === 'In Progress' ? 'กำลังทำ' : 'รอดำเนินการ'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Signatures */}
+              <div className="pt-12 grid grid-cols-2 gap-12 text-center text-xs">
+                <div className="space-y-16">
+                  <p className="text-slate-500 font-semibold uppercase">ผู้จัดทำรายงาน</p>
+                  <div className="border-b border-slate-300 w-48 mx-auto" />
+                  <p className="text-slate-800 font-bold">({user?.displayName || 'เจ้าหน้าที่ผู้รับผิดชอบ'})</p>
+                </div>
+                <div className="space-y-16">
+                  <p className="text-slate-500 font-semibold uppercase">ผู้อนุมัติรายงาน</p>
+                  <div className="border-b border-slate-300 w-48 mx-auto" />
+                  <p className="text-slate-800 font-bold">(........................................................)</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showJobCardModal && activeJob && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white text-slate-900 rounded-3xl w-full max-w-4xl p-8 max-h-[92vh] overflow-y-auto shadow-2xl relative space-y-6 flex flex-col">
@@ -1095,6 +1390,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
                             src={ph.url}
                             alt={`Site pic ${idx + 1}`}
                             className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
                           />
                         </div>
                         <p className="text-[11px] text-slate-600 font-medium text-center truncate italic">

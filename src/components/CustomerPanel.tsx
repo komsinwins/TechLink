@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Customer, OnsiteService, OncallService, Claim } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { 
@@ -13,9 +13,11 @@ import {
 } from 'firebase/firestore';
 import { 
   User, Edit2, Trash2, ShieldAlert, History, MapPin, Phone, Mail, 
-  Building, Search, Plus, X, Laptop, MessageSquare, Clipboard, ArrowUpRight, Clock 
+  Building, Search, Plus, X, Laptop, MessageSquare, Clipboard, ArrowUpRight, Clock,
+  Upload, Download
 } from 'lucide-react';
 import { isClaimOverdue } from '../utils/date';
+import { parseCSV, generateCSV, downloadFile } from '../utils/csvHelper';
 
 export const CustomerPanel: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -25,6 +27,111 @@ export const CustomerPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   
+  // Custom CSV states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const customerHeaders = [
+    'Company Name', 'Company Address', 'Contact Name', 'Contact Details', 
+    'Contact Phone', 'Contact Email', 'Partner Company'
+  ];
+  
+  const customerKeys = [
+    'companyName', 'companyAddress', 'contactName', 'contactDetails', 
+    'contactPhone', 'contactEmail', 'partnerCompany'
+  ];
+
+  const handleExportCSV = () => {
+    const csvContent = generateCSV(customerHeaders, filteredCustomers, customerKeys);
+    downloadFile(`customers_report_${new Date().toISOString().split('T')[0]}.csv`, csvContent);
+  };
+
+  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const text = evt.target?.result as string;
+        if (!text) return;
+
+        const rows = parseCSV(text);
+        if (rows.length < 2) {
+          alert("ไฟล์ CSV ไม่มีข้อมูลเพียงพอ");
+          return;
+        }
+
+        const headers = rows[0].map(h => h.trim().toLowerCase());
+        const importedCustomers: any[] = [];
+
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (row.length === 0 || (row.length === 1 && row[0] === "")) continue;
+
+          const customer: any = {
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+
+          headers.forEach((header, index) => {
+            const val = row[index] || '';
+            if (header === 'company name' || header === 'companyname') customer.companyName = val;
+            else if (header === 'company address' || header === 'companyaddress') customer.companyAddress = val;
+            else if (header === 'contact name' || header === 'contactname') customer.contactName = val;
+            else if (header === 'contact details' || header === 'contactdetails') customer.contactDetails = val;
+            else if (header === 'contact phone' || header === 'contactphone') customer.contactPhone = val;
+            else if (header === 'contact email' || header === 'contactemail') customer.contactEmail = val;
+            else if (header === 'partner company' || header === 'partnercompany') customer.partnerCompany = val;
+          });
+
+          if (!customer.companyName) continue;
+          importedCustomers.push(customer);
+        }
+
+        if (importedCustomers.length === 0) {
+          alert("ไม่พบข้อมูลลูกค้าที่ถูกต้องในไฟล์ CSV");
+          return;
+        }
+
+        if (!confirm(`คุณต้องการนำเข้าข้อมูลฐานข้อมูลลูกค้าจำนวน ${importedCustomers.length} รายการใช่หรือไม่?`)) {
+          return;
+        }
+
+        const path = 'customers';
+        for (const customer of importedCustomers) {
+          const snapshot = await getDocs(collection(db, path));
+          let exists = false;
+          let existingDocId = '';
+          
+          snapshot.forEach((docSnap) => {
+            if (docSnap.data().companyName.toLowerCase().trim() === customer.companyName.toLowerCase().trim()) {
+              exists = true;
+              existingDocId = docSnap.id;
+            }
+          });
+
+          if (exists) {
+            // Overwrite existing or update details
+            await updateDoc(doc(db, path, existingDocId), {
+              ...customer,
+              updatedAt: new Date().toISOString()
+            });
+          } else {
+            await addDoc(collection(db, path), customer);
+          }
+        }
+
+        alert("นำเข้าข้อมูลเสร็จสมบูรณ์!");
+        fetchData();
+      } catch (err) {
+        console.error("Error importing CSV:", err);
+        alert("เกิดข้อผิดพลาดในการนำเข้าไฟล์ CSV: " + (err instanceof Error ? err.message : String(err)));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   // Modal & Edit states
   const [showFormModal, setShowFormModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -129,7 +236,7 @@ export const CustomerPanel: React.FC = () => {
       await deleteDoc(doc(db, 'customers', id));
       setCustomers(customers.filter(c => c.id !== id));
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE);
+      handleFirestoreError(err, OperationType.DELETE, 'customers');
     }
   };
 
@@ -171,7 +278,7 @@ export const CustomerPanel: React.FC = () => {
       }
       setShowFormModal(false);
     } catch (err) {
-      handleFirestoreError(err, isEditing ? OperationType.UPDATE : OperationType.CREATE);
+      handleFirestoreError(err, isEditing ? OperationType.UPDATE : OperationType.CREATE, 'customers');
     }
   };
 
@@ -209,13 +316,42 @@ export const CustomerPanel: React.FC = () => {
           />
         </div>
 
-        <button
-          onClick={handleOpenAdd}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          <span>เพิ่มรายชื่อลูกค้า</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImportCSV}
+            accept=".csv"
+            className="hidden"
+          />
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="นำเข้าไฟล์ CSV สำหรับรายงาน"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5 text-blue-600" />
+            <span>นำเข้า CSV</span>
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            title="ส่งออกรายงาน Excel (.csv)"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600" />
+            <span>ส่งออก CSV</span>
+          </button>
+
+          <button
+            onClick={handleOpenAdd}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>เพิ่มรายชื่อลูกค้า</span>
+          </button>
+        </div>
       </div>
 
       {/* Grid of customer Cards */}

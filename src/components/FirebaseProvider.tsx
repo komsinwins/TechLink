@@ -4,7 +4,10 @@ import {
   onAuthStateChanged, 
   signInWithPopup, 
   GoogleAuthProvider, 
-  signOut 
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile
 } from 'firebase/auth';
 import { 
   doc, 
@@ -22,6 +25,8 @@ interface FirebaseContextType {
   addLookupItem: (category: 'onsiteServiceTypes' | 'oncallProductTypes' | 'claimProductTypes', item: string) => Promise<void>;
   deleteLookupItem: (category: 'onsiteServiceTypes' | 'oncallProductTypes' | 'claimProductTypes', item: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, pass: string) => Promise<void>;
+  signUpWithEmail: (email: string, pass: string, displayName?: string) => Promise<void>;
   logout: () => Promise<void>;
   isOffline: boolean;
 }
@@ -96,6 +101,27 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const signInWithEmail = async (email: string, pass: string) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (error) {
+      console.error("Error signing in with email:", error);
+      throw error;
+    }
+  };
+
+  const signUpWithEmail = async (email: string, pass: string, displayName?: string) => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+      if (displayName && userCredential.user) {
+        await updateProfile(userCredential.user, { displayName });
+      }
+    } catch (error) {
+      console.error("Error signing up with email:", error);
+      throw error;
+    }
+  };
+
   const logout = async () => {
     try {
       await signOut(auth);
@@ -160,6 +186,8 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       addLookupItem,
       deleteLookupItem,
       signInWithGoogle,
+      signInWithEmail,
+      signUpWithEmail,
       logout,
       isOffline
     }}>

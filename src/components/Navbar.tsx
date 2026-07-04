@@ -130,14 +130,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               </div>
             ) : (
-              <button
-                id="login-button"
-                onClick={signInWithGoogle}
-                className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-md shadow-blue-500/15 transition-all hover:-translate-y-0.5"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>Sign in with Google</span>
-              </button>
+              <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 font-bold px-3 py-1.5 rounded-xl">
+                กรุณาเข้าสู่ระบบ
+              </span>
             )}
           </div>
         </div>
