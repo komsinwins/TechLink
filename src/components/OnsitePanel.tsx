@@ -1276,7 +1276,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
             {/* Window action buttons (sticky top) */}
             <div className="flex items-center justify-between border-b border-slate-200 pb-4 shrink-0">
               <span className="text-xs font-mono font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200">
-                ใบงานหมายเลขอ้างอิง: ONS-{activeJob.id.substring(0, 8).toUpperCase()}
+                ใบงานหมายเลขอ้างอิง: WSS_Service-{activeJob.id.substring(0, 8).toUpperCase()}
               </span>
               <div className="flex items-center space-x-2">
                 <button
@@ -1300,15 +1300,14 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
               
               {/* Document Header */}
               <div className="border-b-4 border-slate-800 pb-5 flex flex-col md:flex-row justify-between items-start gap-4">
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <h1 className="text-2xl font-black text-slate-950 uppercase tracking-tight flex items-center gap-2">
-                    WSS Technical Support Service
+                    ใบงานปฏิบัติการบริการ (Job Service)
                   </h1>
-                  <p className="text-xs text-slate-500 font-semibold uppercase">ฝ่ายสนับสนุนด้านเทคนิคและซ่อมบำรุงเครือข่าย</p>
-                  <p className="text-xs text-slate-500">โทรศัพท์: 02-123-4567 | อีเมล: tech-support@wss.co.th</p>
+                  <p className="text-sm text-slate-700 font-bold uppercase">ฝ่ายสนับสนุนด้านเทคนิคและซ่อมบำรุงเครือข่าย</p>
+                  <p className="text-xs text-slate-600 font-semibold">Email : wssservice.wins@gmail.com เบอร์โทรติดต่อ 085 502 9624</p>
                 </div>
                 <div className="text-left md:text-right space-y-0.5">
-                  <h2 className="text-xl font-black text-blue-800">ใบงานปฏิบัติการบริการ (Job Service)</h2>
                   <p className="text-xs text-slate-500">สถานะ: <strong>{activeJob.status === 'Completed' ? 'ดำเนินการเสร็จสมบูรณ์' : activeJob.status === 'In Progress' ? 'กำลังดำเนินการ' : 'รอดำเนินการ'}</strong></p>
                   <p className="text-xs text-slate-500">วันที่สร้าง: {new Date(activeJob.createdAt || Date.now()).toLocaleDateString('th-TH')}</p>
                 </div>
@@ -1332,7 +1331,6 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
                   <div className="grid grid-cols-2 gap-y-1.5 gap-x-4 text-xs text-slate-800">
                     <div>ประเภทบริการ: <strong className="text-slate-900 text-sm block">{activeJob.serviceType}</strong></div>
                     <div>สถานที่หน้างาน: <strong className="text-slate-900 block">{activeJob.onsiteLocation || '-'}</strong></div>
-                    <div>พนักงานรับแจ้ง/เซลส์: <strong className="text-slate-900 block">{activeJob.salesName || '-'}</strong></div>
                     <div>ช่างผู้ปฏิบัติงาน: <strong className="text-slate-900 text-sm block">{activeJob.techName || '-'}</strong></div>
                     
                     <div className="col-span-2 grid grid-cols-3 gap-1 bg-slate-50 p-2 rounded-lg border border-slate-100 mt-2">
@@ -1401,20 +1399,6 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
                   </div>
                 </div>
               )}
-
-              {/* Signatures section */}
-              <div className="pt-8 grid grid-cols-2 gap-12 text-center text-xs">
-                <div className="space-y-16">
-                  <p className="text-slate-500 font-semibold uppercase">ลงชื่อผู้ปฏิบัติงาน (ช่างผู้รับผิดชอบ)</p>
-                  <div className="border-b border-slate-300 w-48 mx-auto" />
-                  <p className="text-slate-800 font-bold">({activeJob.techName || '...........................................'})</p>
-                </div>
-                <div className="space-y-16">
-                  <p className="text-slate-500 font-semibold uppercase">ลงชื่อตัวแทนลูกค้า (ผู้ตรวจรับงาน)</p>
-                  <div className="border-b border-slate-300 w-48 mx-auto" />
-                  <p className="text-slate-800 font-bold">({activeJob.contactName || '...........................................'})</p>
-                </div>
-              </div>
 
             </div>
 

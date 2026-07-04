@@ -12,7 +12,7 @@ import { Terminal, Shield, AlertTriangle } from 'lucide-react';
 type Tab = 'dashboard' | 'onsite' | 'oncall' | 'claim' | 'customer';
 
 const MainAppContent: React.FC = () => {
-  const { user, loading, connectionStatus, signInWithEmail, signUpWithEmail } = useFirebase();
+  const { user, loading, connectionStatus, signInWithEmail, signUpWithEmail, signInWithGoogle } = useFirebase();
   const [currentTab, setCurrentTab] = useState<Tab>('dashboard');
   
   // Custom local auth UI states
@@ -45,6 +45,8 @@ const MainAppContent: React.FC = () => {
         errMsg = 'อีเมลนี้ถูกใช้งานแล้วในระบบ';
       } else if (err.code === 'auth/weak-password') {
         errMsg = 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        errMsg = 'ยังไม่ได้เปิดใช้งานการเข้าสู่ระบบด้วยอีเมล/รหัสผ่านใน Firebase Console สำหรับโปรเจกต์นี้ กรุณาเข้าไปเปิดใช้งานที่ Firebase Console > Authentication > Sign-in method หรือคลิกเลือก "เข้าสู่ระบบด้วย Google" ด้านล่างแทน';
       } else if (err.message) {
         errMsg = err.message;
       }
@@ -72,13 +74,27 @@ const MainAppContent: React.FC = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center font-sans p-4">
+        <div className="bg-white border border-slate-200 p-8 rounded-3xl text-center space-y-4 shadow-lg max-w-sm w-full">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <h2 className="text-lg font-bold text-slate-800">กำลังโหลดระบบ WSS_TechLink...</h2>
+          <p className="text-xs text-slate-500">โปรดรอสักครู่ ขณะนี้ระบบกำลังเชื่อมต่อฐานข้อมูลความปลอดภัย</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans print:bg-white print:text-slate-900">
       
       {/* Top Warning/Notification Banner about unresolved items */}
-      <div className="print:hidden">
-        <OverdueAlerts />
-      </div>
+      {user && (
+        <div className="print:hidden">
+          <OverdueAlerts />
+        </div>
+      )}
 
       {/* Navigation bar with auth & lookup control */}
       <div className="print:hidden">

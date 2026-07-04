@@ -55,30 +55,32 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Navigation Tabs - Desktop */}
-          <nav className="hidden md:flex space-x-1">
-            {tabs.map((tab) => {
-              const isActive = currentTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  id={`tab-btn-${tab.id}`}
-                  onClick={() => handleTabClick(tab.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                >
-                  {tab.label}
-                  {tab.id === 'dashboard' && overdueCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center animate-pulse border-2 border-white">
-                      {overdueCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+          {user && (
+            <nav className="hidden md:flex space-x-1">
+              {tabs.map((tab) => {
+                const isActive = currentTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    id={`tab-btn-${tab.id}`}
+                    onClick={() => handleTabClick(tab.id)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative ${
+                      isActive
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    {tab.label}
+                    {tab.id === 'dashboard' && overdueCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center animate-pulse border-2 border-white">
+                        {overdueCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          )}
 
           {/* Right Area: Auth & Firebase status */}
           <div className="flex items-center space-x-3">
@@ -98,7 +100,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             {/* Auth Button */}
-            {user ? (
+            {user && user.uid !== 'guest-user-wss' ? (
               <div className="flex items-center space-x-3 bg-slate-50 p-1 rounded-xl border border-slate-200">
                 {user.photoURL ? (
                   <img
@@ -123,39 +125,42 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   id="signout-button"
                   onClick={logout}
-                  title="Sign Out"
-                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                  title="ออกจากระบบ"
+                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
             ) : (
-              <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 font-bold px-3 py-1.5 rounded-xl">
-                กรุณาเข้าสู่ระบบ
-              </span>
+              <div className="flex items-center space-x-2 bg-slate-50 p-1.5 px-3 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold">
+                <div className="w-5 h-5 rounded bg-slate-450 flex items-center justify-center text-white text-[10px] font-bold">G</div>
+                <span>ผู้ใช้ทั่วไป (Guest)</span>
+              </div>
             )}
           </div>
         </div>
 
         {/* Mobile Navigation Row */}
-        <div className="md:hidden flex overflow-x-auto py-2 -mx-4 px-4 space-x-2 border-t border-slate-100 scrollbar-none">
-          {tabs.map((tab) => {
-            const isActive = currentTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabClick(tab.id)}
-                className={`whitespace-nowrap px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        {user && (
+          <div className="md:hidden flex overflow-x-auto py-2 -mx-4 px-4 space-x-2 border-t border-slate-100 scrollbar-none">
+            {tabs.map((tab) => {
+              const isActive = currentTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabClick(tab.id)}
+                  className={`whitespace-nowrap px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    isActive
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </header>
   );

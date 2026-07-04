@@ -39,6 +39,14 @@ const defaultLookups: LookupTypes = {
   claimProductTypes: ["IP Camera", "PoE Switch", "UPS Battery", "Hard Drive", "Network Router"]
 };
 
+const guestUser = {
+  uid: 'guest-user-wss',
+  email: 'guest@wss.com',
+  displayName: 'ผู้ใช้ทั่วไป (Guest)',
+  emailVerified: true,
+  isAnonymous: true,
+} as any;
+
 export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,27 +71,25 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Monitor Authentication
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        // Fetch or initialize customized lookup types
-        try {
-          const docRef = doc(db, 'settings', 'lookups');
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            setLookups(docSnap.data() as LookupTypes);
-          } else {
-            // Save defaults if not present
-            await setDoc(docRef, {
-              ...defaultLookups,
-              updatedAt: new Date().toISOString()
-            });
-            setLookups(defaultLookups);
-          }
-        } catch (err) {
-          console.error("Error reading settings doc:", err);
+      const activeUser = currentUser || guestUser;
+      setUser(activeUser);
+      
+      // Fetch or initialize customized lookup types
+      try {
+        const docRef = doc(db, 'settings', 'lookups');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setLookups(docSnap.data() as LookupTypes);
+        } else {
+          // Save defaults if not present
+          await setDoc(docRef, {
+            ...defaultLookups,
+            updatedAt: new Date().toISOString()
+          });
+          setLookups(defaultLookups);
         }
-      } else {
-        // Reset lookups to default if logged out
+      } catch (err) {
+        console.error("Error reading settings doc:", err);
         setLookups(defaultLookups);
       }
       setLoading(false);
