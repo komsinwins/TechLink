@@ -79,6 +79,7 @@ export interface Claim {
   photoBeforeUrl: string;
   photoAfterUrl: string;
   notes: string;
+  remarks?: string;
   createdAt: string;
   updatedAt: string;
 }

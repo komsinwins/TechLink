@@ -26,6 +26,17 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState('All');
+
+  const getJobNumber = (job: OnsiteService) => {
+    const sortedJobs = [...jobs].sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return aTime - bTime;
+    });
+    const index = sortedJobs.findIndex(j => j.id === job.id);
+    const seqNum = index !== -1 ? index + 1 : 1;
+    return `WSS_Service-${String(seqNum).padStart(4, '0')}`;
+  };
   
   // Custom CSV Ref and Report States
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1276,7 +1287,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
             {/* Window action buttons (sticky top) */}
             <div className="flex items-center justify-between border-b border-slate-200 pb-4 shrink-0">
               <span className="text-xs font-mono font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200">
-                ใบงานหมายเลขอ้างอิง: WSS_Service-{activeJob.id.substring(0, 8).toUpperCase()}
+                ใบงานหมายเลขอ้างอิง: {getJobNumber(activeJob)}
               </span>
               <div className="flex items-center space-x-2">
                 <button

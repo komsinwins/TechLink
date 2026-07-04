@@ -209,6 +209,7 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
   const [photoBeforeUrl, setPhotoBeforeUrl] = useState('');
   const [photoAfterUrl, setPhotoAfterUrl] = useState('');
   const [notes, setNotes] = useState('');
+  const [remarks, setRemarks] = useState('');
 
   useEffect(() => {
     if (initialSearch) {
@@ -271,6 +272,7 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
     setPhotoBeforeUrl('');
     setPhotoAfterUrl('');
     setNotes('');
+    setRemarks('');
     
     setShowFormModal(true);
   };
@@ -300,6 +302,7 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
     setPhotoBeforeUrl(claim.photoBeforeUrl || '');
     setPhotoAfterUrl(claim.photoAfterUrl || '');
     setNotes(claim.notes || '');
+    setRemarks(claim.remarks || '');
     
     setShowFormModal(true);
   };
@@ -336,6 +339,7 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
       photoBeforeUrl,
       photoAfterUrl,
       notes,
+      remarks,
       updatedAt: new Date().toISOString()
     };
 
@@ -955,14 +959,26 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-600">อาการปัญหา / หมายเหตุการเคลม</label>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="อาการชำรุด เช่น เลนส์กล้องแตกร้าว ไฟไม่เข้าพอร์ตจ่าย PoE..."
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-900 focus:outline-none focus:border-blue-500 h-20"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600">อาการชำรุด / อาการปัญหาที่พบ</label>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="อาการชำรุด เช่น เลนส์กล้องแตกร้าว ไฟไม่เข้าพอร์ตจ่าย PoE..."
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-900 focus:outline-none focus:border-blue-500 h-20"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600">หมายเหตุ</label>
+                    <textarea
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      placeholder="หมายเหตุเพิ่มเติมสำหรับการเคลม..."
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-900 focus:outline-none focus:border-blue-500 h-20"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1325,9 +1341,18 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">อาการเสีย & ข้อคิดเห็นทางเทคนิค</h3>
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 h-full">
-                    <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap">{activeClaim.notes || 'ไม่มีหมายเหตุเพิ่มเติม'}</p>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">อาการเสีย & หมายเหตุ</h3>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 h-full space-y-2 text-left">
+                    <div>
+                      <span className="text-[10px] font-black text-slate-400 block uppercase">อาการชำรุด / อาการปัญหาที่พบ</span>
+                      <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap">{activeClaim.notes || '-'}</p>
+                    </div>
+                    {activeClaim.remarks && (
+                      <div className="border-t border-slate-200/60 pt-2">
+                        <span className="text-[10px] font-black text-slate-400 block uppercase">หมายเหตุเพิ่มเติม</span>
+                        <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap">{activeClaim.remarks}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
