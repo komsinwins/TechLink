@@ -315,7 +315,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
   // Sync computed values
   // Sync computed values
   const workingDays = calculateDaysBetween(actionDate, fixedDate);
-  const repairDuration = calculateDaysBetween(assignedDate, closeDate || fixedDate || new Date().toISOString().split('T')[0]);
+  const repairDuration = calculateDaysBetween(assignedDate, fixedDate || new Date().toISOString().split('T')[0]);
 
   // Open form for adding
   const handleOpenAdd = () => {
@@ -406,16 +406,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
     e.preventDefault();
     if (!companyName.trim()) return;
 
-    // Enforce attaching report file before closing
-    if (status === 'Completed' && !reportFileName.trim()) {
-      alert('⚠️ ไม่สามารถปิดงานได้: กรุณาแนบไฟล์รายงานการปฏิบัติงานก่อนทำการเปลี่ยนสถานะเป็นเสร็จสิ้น (Completed)');
-      return;
-    }
-
-    let finalCloseDate = closeDate;
-    if (status === 'Completed' && !finalCloseDate) {
-      finalCloseDate = new Date().toISOString().split('T')[0];
-    }
+    let finalCloseDate = fixedDate || new Date().toISOString().split('T')[0];
 
     const path = 'onsite_services';
     const combinedTech = [techName1, techName2].filter(Boolean).join(', ');
@@ -631,8 +622,9 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
     <div className="space-y-6">
       
       {/* Action / Search Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white border border-slate-200 shadow-sm p-4 rounded-2xl">
-        <div className="flex flex-1 flex-col md:flex-row gap-3">
+      <div className="space-y-4 bg-white border border-slate-200 shadow-sm p-4 rounded-2xl">
+        {/* Tier 1: Search and Filter Tabs */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           {/* Search box */}
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-2.5 h-4.5 w-4.5 text-slate-400" />
@@ -645,99 +637,107 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
             />
           </div>
 
-          {/* Status filter tabs */}
-          <div className="flex bg-slate-50 border border-slate-200 rounded-xl p-1 shrink-0 flex-wrap">
-            {['All', 'Pending', 'In Progress', 'Completed'].map((st) => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  statusFilter === st
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {st === 'All' ? 'ทั้งหมด' : st === 'Pending' ? 'รอดำเนินการ' : st === 'In Progress' ? 'กำลังดำเนินการ' : 'เสร็จสมบูรณ์'}
-              </button>
-            ))}
-          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Status filter tabs */}
+            <div className="flex bg-slate-50 border border-slate-200 rounded-xl p-1 shrink-0 flex-wrap">
+              {['All', 'Pending', 'In Progress', 'Completed'].map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setStatusFilter(st)}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    statusFilter === st
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {st === 'All' ? 'ทั้งหมด' : st === 'Pending' ? 'รอดำเนินการ' : st === 'In Progress' ? 'กำลังดำเนินการ' : 'เสร็จสมบูรณ์'}
+                </button>
+              ))}
+            </div>
 
-          {/* View Mode selectors */}
-          <div className="flex bg-slate-50 border border-slate-200 rounded-xl p-1 shrink-0 flex-wrap">
-            {([
-              { key: 'View', label: 'View', icon: Menu },
-              { key: 'content', label: 'content', icon: FileText },
-              { key: 'Icon', label: 'Icon', icon: LayoutGrid },
-              { key: 'List', label: 'List', icon: LayoutList }
-            ] as const).map(({ key, label, icon: IconComponent }) => (
-              <button
-                key={key}
-                onClick={() => setViewMode(key)}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                  viewMode === key
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title={label}
-              >
-                <IconComponent className="w-3.5 h-3.5" />
-                <span>{label}</span>
-              </button>
-            ))}
+            {/* View Mode selectors */}
+            <div className="flex bg-slate-50 border border-slate-200 rounded-xl p-1 shrink-0 flex-wrap">
+              {([
+                { key: 'View', label: 'View', icon: Menu },
+                { key: 'content', label: 'content', icon: FileText },
+                { key: 'Icon', label: 'Icon', icon: LayoutGrid },
+                { key: 'List', label: 'List', icon: LayoutList }
+              ] as const).map(({ key, label, icon: IconComponent }) => (
+                <button
+                  key={key}
+                  onClick={() => setViewMode(key)}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                    viewMode === key
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title={label}
+                >
+                  <IconComponent className="w-3.5 h-3.5" />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-          {/* Hidden File Input */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleImportCSV}
-            accept=".csv"
-            className="hidden"
-          />
+        {/* Divider */}
+        <div className="border-t border-slate-100 my-1" />
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            title="นำเข้าไฟล์ CSV สำหรับรายงาน"
-            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-          >
-            <Upload className="w-3.5 h-3.5 text-blue-600" />
-            <span>นำเข้า CSV</span>
-          </button>
+        {/* Tier 2: Action Buttons */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Hidden File Input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImportCSV}
+              accept=".csv"
+              className="hidden"
+            />
 
-          <button
-            onClick={handleExportCSV}
-            title="ส่งออกรายงาน Excel (.csv)"
-            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-emerald-600" />
-            <span>ส่งออก Excel (.csv)</span>
-          </button>
-
-          <button
-            onClick={() => setShowPrintReportModal(true)}
-            title="พิมพ์รายงานรวม PDF"
-            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-          >
-            <Printer className="w-3.5 h-3.5 text-indigo-600" />
-            <span>พิมพ์รายงานรวม (PDF)</span>
-          </button>
-
-          {selectedJobIds.length > 0 && (
             <button
-              onClick={() => setShowCombinedPrintModal(true)}
-              title="พิมพ์รวมใบงานที่เลือกเป็น PDF เดียวกัน"
-              className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md shadow-indigo-500/10"
+              onClick={() => fileInputRef.current?.click()}
+              title="นำเข้าไฟล์ CSV สำหรับรายงาน"
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
             >
-              <Printer className="w-3.5 h-3.5" />
-              <span>พิมพ์รวม ({selectedJobIds.length} ใบงาน)</span>
+              <Upload className="w-3.5 h-3.5 text-blue-600" />
+              <span>นำเข้า CSV</span>
             </button>
-          )}
+
+            <button
+              onClick={handleExportCSV}
+              title="ส่งออกรายงาน Excel (.csv)"
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600" />
+              <span>ส่งออก Excel (.csv)</span>
+            </button>
+
+            <button
+              onClick={() => setShowPrintReportModal(true)}
+              title="พิมพ์รายงานรวม PDF"
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5 text-indigo-600" />
+              <span>พิมพ์รายงานรวม (PDF)</span>
+            </button>
+
+            {selectedJobIds.length > 0 && (
+              <button
+                onClick={() => setShowCombinedPrintModal(true)}
+                title="พิมพ์รวมใบงานที่เลือกเป็น PDF เดียวกัน"
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md shadow-indigo-500/10"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>พิมพ์รวม ({selectedJobIds.length} ใบงาน)</span>
+              </button>
+            )}
+          </div>
 
           <button
             onClick={handleOpenAdd}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 shrink-0 cursor-pointer"
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 shrink-0 cursor-pointer w-full sm:w-auto"
           >
             <Plus className="w-4 h-4" />
             <span>เพิ่มงาน Onsite Service</span>
@@ -785,7 +785,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                     {filteredJobs.map((job) => {
-                      const isOver = isJobOverdue(job.assignedDate, job.status, job.closeDate);
+                      const isOver = isJobOverdue(job.assignedDate, job.status, job.fixedDate);
                       const isChecked = selectedJobIds.includes(job.id || '');
                       return (
                         <tr 
@@ -936,7 +936,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
                           <div className="flex gap-4 text-[10px] text-slate-500">
                             <span>ช่างผู้ปฏิบัติงาน: <strong className="text-slate-700">{job.techName1 || '-'}</strong></span>
                             <span>วันที่เข้าแก้ไข: <strong className="text-slate-700">{job.actionDate}</strong></span>
-                            <span>วันที่ปิดงาน: <strong className="text-slate-700">{job.closeDate || '-'}</strong></span>
+                            <span>วันที่ทำงานเสร็จสิ้น: <strong className="text-slate-700">{job.fixedDate || '-'}</strong></span>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-center align-top">
@@ -974,7 +974,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
             {viewMode === 'Icon' && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
                 {filteredJobs.map((job) => {
-                  const isOver = isJobOverdue(job.assignedDate, job.status, job.closeDate);
+                  const isOver = isJobOverdue(job.assignedDate, job.status, job.fixedDate);
                   return (
                     <div 
                       key={job.id} 
@@ -1640,24 +1640,10 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
                     </div>
                   </div>
 
-                  {/* Close Job Date & Report File Attachment */}
-                  <div className="space-y-1.5 text-left md:col-span-1">
-                    <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-rose-600" />
-                      วันที่ปิดงาน (Close Date)
-                    </label>
-                    <input
-                      type="date"
-                      value={closeDate}
-                      onChange={(e) => setCloseDate(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-900 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5 text-left md:col-span-2">
+                  <div className="space-y-1.5 text-left md:col-span-3">
                     <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
                       <FileText className="w-3.5 h-3.5 text-blue-600" />
-                      แนบไฟล์รายงานการปฏิบัติหน้าที่ (จำเป็นสำหรับการปิดงาน)
+                      แนบไฟล์รายงานการปฏิบัติหน้าที่ (ทางเลือก)
                     </label>
                     <div className="bg-white border border-slate-200 rounded-xl p-2.5 flex flex-col sm:flex-row justify-between items-center gap-2">
                       {reportFileName ? (
@@ -1667,7 +1653,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
                           </div>
                           <div className="text-left">
                             <p className="text-xs font-bold text-slate-800 truncate max-w-[160px]">{reportFileName}</p>
-                            <p className="text-[9px] text-slate-400">สถานะ: พร้อมปิดงาน</p>
+                            <p className="text-[9px] text-slate-400">สถานะ: แนบไฟล์เสร็จสิ้น</p>
                           </div>
                         </div>
                       ) : (
@@ -2069,7 +2055,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
                   ดาวน์โหลดรายงาน Excel
                 </button>
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => { window.focus(); window.print(); }}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-blue-500/10"
                 >
                   <Printer className="w-4 h-4" />
@@ -2081,6 +2067,15 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
                 >
                   ปิดหน้าต่าง
                 </button>
+              </div>
+            </div>
+
+            {/* Instruction notice (Visible only on screen, hidden on print) */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-800 flex items-start gap-3 print:hidden shrink-0 text-left">
+              <span className="text-lg">💡</span>
+              <div className="space-y-1">
+                <p className="font-bold">แนะนำการส่งออก PDF / สั่งพิมพ์:</p>
+                <p>หากสั่งพิมพ์ในหน้าต่าง Preview นี้แล้วไม่ตอบสนอง หรือหน้า PDF จัดเรียงไม่สมบูรณ์ กรุณากดปุ่ม <strong>"เปิดในแท็บใหม่"</strong> (ปุ่มลูกศรชี้ขึ้นที่มุมขวาบนสุดของหน้าจอ) เพื่อสั่งพิมพ์ใหม่อีกครั้ง ระบบจะส่งออกไฟล์ PDF ได้อย่างปกติและสมบูรณ์</p>
               </div>
             </div>
 
@@ -2138,7 +2133,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => { window.focus(); window.print(); }}
                   className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-indigo-500/10"
                 >
                   <Printer className="w-4 h-4" />
@@ -2151,6 +2146,15 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
                   <X className="w-4 h-4" />
                   ปิดหน้าต่าง
                 </button>
+              </div>
+            </div>
+
+            {/* Instruction notice (Visible only on screen, hidden on print) */}
+            <div className="mx-5 my-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-800 flex items-start gap-3 print:hidden shrink-0 text-left">
+              <span className="text-lg">💡</span>
+              <div className="space-y-1">
+                <p className="font-bold">แนะนำการส่งออก PDF / สั่งพิมพ์รวม:</p>
+                <p>หากสั่งพิมพ์ในหน้าต่าง Preview นี้แล้วไม่ตอบสนอง หรือหน้า PDF จัดเรียงไม่สมบูรณ์ กรุณากดปุ่ม <strong>"เปิดในแท็บใหม่"</strong> (ปุ่มลูกศรชี้ขึ้นที่มุมขวาบนสุดของหน้าจอ) เพื่อสั่งพิมพ์ใหม่อีกครั้ง ระบบจะจัดหน้ากระดาษและรวมเล่มเอกสารได้อย่างสมบูรณ์</p>
               </div>
             </div>
 
@@ -2240,7 +2244,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({ job, user, getJobNu
               </strong>
             </div>
             
-            <div className="col-span-2 grid grid-cols-4 gap-1 bg-slate-50 p-2 rounded-lg border border-slate-100 mt-2 text-center">
+            <div className="col-span-2 grid grid-cols-3 gap-1 bg-slate-50 p-2 rounded-lg border border-slate-100 mt-2 text-center">
               <div>
                 <span className="text-[9px] text-slate-400 block font-semibold uppercase">วันที่รับแจ้ง</span>
                 <span className="font-bold text-slate-800">{job.assignedDate || '-'}</span>
@@ -2252,10 +2256,6 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({ job, user, getJobNu
               <div>
                 <span className="text-[9px] text-slate-400 block font-semibold uppercase">วันที่ทำงานสำเร็จ</span>
                 <span className="font-bold text-slate-800">{job.fixedDate || '-'}</span>
-              </div>
-              <div>
-                <span className="text-[9px] text-slate-400 block font-semibold uppercase">วันที่ปิดงาน</span>
-                <span className="font-bold text-slate-800">{job.closeDate || '-'}</span>
               </div>
             </div>
           </div>
