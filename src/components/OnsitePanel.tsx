@@ -37,8 +37,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
     const index = sortedJobs.findIndex(j => j.id === job.id);
     const seqNum = index !== -1 ? index + 1 : 1;
     const year = new Date(job.createdAt || Date.now()).getFullYear();
-    const shortYear = String(year).slice(-2);
-    return `WSS_Service-${String(seqNum).padStart(3, '0')}/${shortYear}`;
+    return `WSS_Service_${String(seqNum).padStart(3, '0')}_${year}`;
   };
   
   // Custom CSV Ref and Report States
@@ -713,7 +712,7 @@ export const OnsitePanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
             className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-emerald-600" />
-            <span>ส่งออก CSV</span>
+            <span>ส่งออก Excel (.csv)</span>
           </button>
 
           <button
