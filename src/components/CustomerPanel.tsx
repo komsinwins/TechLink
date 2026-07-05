@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Customer, OnsiteService, OncallService, Claim } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { useFirebase } from './FirebaseProvider';
 import { 
   collection, 
   getDocs, 
@@ -14,18 +15,20 @@ import {
 import { 
   User, Edit2, Trash2, ShieldAlert, History, MapPin, Phone, Mail, 
   Building, Search, Plus, X, Laptop, MessageSquare, Clipboard, ArrowUpRight, Clock,
-  Upload, Download
+  Upload, Download, LayoutGrid, LayoutList, Menu, FileText
 } from 'lucide-react';
 import { isClaimOverdue } from '../utils/date';
 import { parseCSV, generateCSV, downloadFile } from '../utils/csvHelper';
 
 export const CustomerPanel: React.FC = () => {
+  const { lookups, addLookupItem, deleteLookupItem } = useFirebase();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [onsiteJobs, setOnsiteJobs] = useState<OnsiteService[]>([]);
   const [oncallJobs, setOncallJobs] = useState<OncallService[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'View' | 'content' | 'Icon' | 'List'>('Icon');
   
   // Custom CSV states
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -149,6 +152,7 @@ export const CustomerPanel: React.FC = () => {
   const [contactPhone, setContactPhone] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [partnerCompany, setPartnerCompany] = useState('');
+  const [salesName, setSalesName] = useState('');
 
   // Fetch Core Lists
   const fetchData = async () => {
@@ -207,6 +211,7 @@ export const CustomerPanel: React.FC = () => {
     setContactPhone('');
     setContactEmail('');
     setPartnerCompany('');
+    setSalesName('');
     setShowFormModal(true);
   };
 
@@ -220,6 +225,7 @@ export const CustomerPanel: React.FC = () => {
     setContactPhone(cust.contactPhone);
     setContactEmail(cust.contactEmail || '');
     setPartnerCompany(cust.partnerCompany || '');
+    setSalesName(cust.salesName || '');
     setShowFormModal(true);
   };
 
@@ -256,6 +262,7 @@ export const CustomerPanel: React.FC = () => {
       contactPhone: contactPhone.trim(),
       contactEmail: contactEmail.trim(),
       partnerCompany: partnerCompany.trim(),
+      salesName: salesName.trim(),
       updatedAt: new Date().toISOString()
     };
 
@@ -304,16 +311,42 @@ export const CustomerPanel: React.FC = () => {
     <div className="space-y-6">
       
       {/* Search and Action area */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white border border-slate-200 shadow-sm p-4 rounded-2xl">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-2.5 h-4.5 w-4.5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="ค้นหาชื่อบริษัท, ผู้ติดต่อ, เบอร์โทร..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 transition-colors"
-          />
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white border border-slate-200 shadow-sm p-4 rounded-2xl">
+        <div className="flex flex-1 flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-2.5 h-4.5 w-4.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="ค้นหาชื่อบริษัท, ผู้ติดต่อ, เบอร์โทร..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
+
+          {/* View Mode selectors */}
+          <div className="flex bg-slate-50 border border-slate-200 rounded-xl p-1 shrink-0 flex-wrap">
+            {([
+              { key: 'View', label: 'View', icon: Menu },
+              { key: 'content', label: 'content', icon: FileText },
+              { key: 'Icon', label: 'Icon', icon: LayoutGrid },
+              { key: 'List', label: 'List', icon: LayoutList }
+            ] as const).map(({ key, label, icon: IconComponent }) => (
+              <button
+                key={key}
+                onClick={() => setViewMode(key)}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                  viewMode === key
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title={label}
+              >
+                <IconComponent className="w-3.5 h-3.5" />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
@@ -354,7 +387,6 @@ export const CustomerPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid of customer Cards */}
       {loading ? (
         <div className="py-20 text-center text-slate-500">
           <Clock className="w-8 h-8 animate-spin mx-auto mb-3 text-blue-600" />
@@ -365,119 +397,309 @@ export const CustomerPanel: React.FC = () => {
           ไม่พบข้อมูลรายชื่อลูกค้าในฐานข้อมูล
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCustomers.map((cust) => {
-            const hasOverdue = hasDelayedClaims(cust.companyName);
-            const onsiteCount = onsiteJobs.filter(j => j.companyName.toLowerCase().trim() === cust.companyName.toLowerCase().trim()).length;
-            const oncallCount = oncallJobs.filter(j => j.companyName.toLowerCase().trim() === cust.companyName.toLowerCase().trim()).length;
-            const claimsCount = claims.filter(c => c.companyName.toLowerCase().trim() === cust.companyName.toLowerCase().trim()).length;
-
-            return (
-              <div 
-                key={cust.id} 
-                className={`bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm hover:shadow-md hover:border-slate-300 transition-all hover:-translate-y-0.5 relative group ${
-                  hasOverdue ? 'border-rose-300 bg-rose-50/10' : ''
-                }`}
-              >
-                {/* Delayed warning label */}
-                {hasOverdue && (
-                  <span className="absolute top-4 right-4 bg-rose-100 text-rose-700 border border-rose-200 text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
-                    <ShieldAlert className="w-3 h-3" />
-                    มีของเคลมค้างเกิน 30 วัน
-                  </span>
-                )}
-
-                {/* Company Title */}
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <div className={`p-2 rounded-xl border ${hasOverdue ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                      <Building className="w-5 h-5" />
-                    </div>
-                    <h3 className="text-slate-900 font-bold text-base group-hover:text-blue-600 transition-colors leading-tight">
-                      {cust.companyName}
-                    </h3>
-                  </div>
-                  {cust.partnerCompany && (
-                    <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wide">
-                      พาร์ทเนอร์: {cust.partnerCompany}
-                    </p>
-                  )}
-                </div>
-
-                {/* Details list */}
-                <div className="space-y-1.5 text-xs text-slate-600 border-t border-slate-100 pt-3">
-                  <p className="flex items-start gap-1.5">
-                    <User className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                    <span>ผู้ติดต่อ: <strong className="text-slate-800">{cust.contactName || '-'}</strong> {cust.contactDetails ? `(${cust.contactDetails})` : ''}</span>
-                  </p>
-                  <p className="flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>โทรศัพท์: <strong className="text-slate-800">{cust.contactPhone || '-'}</strong></span>
-                  </p>
-                  <p className="flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="truncate">อีเมล: {cust.contactEmail || '-'}</span>
-                  </p>
-                  {cust.companyAddress && (
-                    <p className="flex items-start gap-1.5 pt-1 text-slate-500">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                      <span className="line-clamp-2">{cust.companyAddress}</span>
-                    </p>
-                  )}
-                </div>
-
-                {/* Counter Summaries */}
-                <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-150 text-center text-[10px]">
-                  <div>
-                    <span className="text-slate-500 block font-semibold uppercase">Onsite</span>
-                    <span className="text-sm font-bold text-slate-800 font-mono">{onsiteCount} ครั้ง</span>
-                  </div>
-                  <div className="border-x border-slate-200">
-                    <span className="text-slate-500 block font-semibold uppercase">Oncall</span>
-                    <span className="text-sm font-bold text-slate-800 font-mono">{oncallCount} ครั้ง</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block font-semibold uppercase">เคลมสินค้า</span>
-                    <span className={`text-sm font-bold font-mono ${hasOverdue ? 'text-rose-600 font-black' : 'text-slate-800'}`}>
-                      {claimsCount} ชิ้น
-                    </span>
-                  </div>
-                </div>
-
-                {/* Actions Row */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <button
-                    onClick={() => handleOpenHistory(cust)}
-                    className="flex items-center gap-1 text-xs bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white px-3 py-1.5 rounded-lg border border-blue-100 hover:border-blue-600 transition-all font-semibold"
-                  >
-                    <History className="w-3.5 h-3.5" />
-                    <span>ประวัติบริการย้อนหลัง</span>
-                    <ArrowUpRight className="w-3 h-3" />
-                  </button>
-
-                  <div className="flex space-x-1">
-                    <button
-                      id={`edit-cust-btn-${cust.id}`}
-                      onClick={() => handleOpenEdit(cust)}
-                      className="p-1.5 bg-slate-50 hover:bg-slate-150 text-slate-600 hover:text-slate-900 rounded-lg transition-colors border border-slate-200"
-                      title="แก้ไขรายชื่อลูกค้า"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      id={`delete-cust-btn-${cust.id}`}
-                      onClick={() => handleDelete(cust.id)}
-                      className="p-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg transition-colors border border-rose-100 hover:border-rose-600"
-                      title="ลบรายชื่อลูกค้า"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
+        <div className="p-1">
+          {/* View Mode: View (Detailed Grid Table) */}
+          {viewMode === 'View' && (
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 tracking-wider uppercase">
+                      <th className="px-6 py-4">ลูกค้า / พาร์ทเนอร์</th>
+                      <th className="px-6 py-4">ผู้ติดต่อ</th>
+                      <th className="px-6 py-4">เบอร์โทร / อีเมล</th>
+                      <th className="px-6 py-4">พนักงานขาย</th>
+                      <th className="px-6 py-4 text-center">ประวัติบริการ (Onsite/Oncall/Claim)</th>
+                      <th className="px-6 py-4 text-right">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                    {filteredCustomers.map((cust) => {
+                      const hasOverdue = hasDelayedClaims(cust.companyName);
+                      const onsiteCount = onsiteJobs.filter(j => j.companyName.toLowerCase().trim() === cust.companyName.toLowerCase().trim()).length;
+                      const oncallCount = oncallJobs.filter(j => j.companyName.toLowerCase().trim() === cust.companyName.toLowerCase().trim()).length;
+                      const claimsCount = claims.filter(c => c.companyName.toLowerCase().trim() === cust.companyName.toLowerCase().trim()).length;
+                      return (
+                        <tr key={cust.id} className={`hover:bg-slate-50/70 transition-colors ${hasOverdue ? 'bg-rose-50/20' : ''}`}>
+                          <td className="px-6 py-4 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 text-sm">{cust.companyName}</span>
+                              {hasOverdue && (
+                                <span className="bg-rose-100 text-rose-700 text-[9px] font-bold px-1.5 py-0.5 rounded animate-pulse">
+                                  ค้างเคลม
+                                </span>
+                              )}
+                            </div>
+                            {cust.partnerCompany && <p className="text-[10px] text-blue-600 font-bold">พาร์ทเนอร์: {cust.partnerCompany}</p>}
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="font-semibold text-slate-900">{cust.contactName || '-'}</p>
+                            <p className="text-[11px] text-slate-500">{cust.contactDetails || '-'}</p>
+                          </td>
+                          <td className="px-6 py-4 space-y-0.5 font-mono text-[11px]">
+                            <p className="text-slate-800">{cust.contactPhone || '-'}</p>
+                            <p className="text-slate-500">{cust.contactEmail || '-'}</p>
+                          </td>
+                          <td className="px-6 py-4 text-slate-700 font-medium">
+                            {cust.salesName || '-'}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => handleOpenHistory(cust)}
+                                className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white px-2.5 py-1 rounded text-[11px] font-bold border border-blue-100 hover:border-blue-600 transition-all"
+                              >
+                                <History className="w-3 h-3" />
+                                <span>{onsiteCount} Onsite / {oncallCount} Oncall / {claimsCount} เคลม</span>
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-right space-x-1 whitespace-nowrap">
+                            <button
+                              id={`edit-cust-btn-${cust.id}`}
+                              onClick={() => handleOpenEdit(cust)}
+                              className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition-colors border border-slate-200"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              id={`delete-cust-btn-${cust.id}`}
+                              onClick={() => handleDelete(cust.id)}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg transition-colors border border-rose-100 hover:border-rose-600"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            );
-          })}
+            </div>
+          )}
+
+          {/* View Mode: content (Content focused customer address / notes / partner) */}
+          {viewMode === 'content' && (
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 tracking-wider uppercase">
+                      <th className="px-6 py-4">ลูกค้า</th>
+                      <th className="px-6 py-4">ที่อยู่บริษัท & รายละเอียดพาร์ทเนอร์ (Content)</th>
+                      <th className="px-6 py-4 text-right">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                    {filteredCustomers.map((cust) => (
+                      <tr key={cust.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="px-6 py-4 space-y-1 w-1/4 align-top">
+                          <p className="font-bold text-slate-900 text-sm">{cust.companyName}</p>
+                          <p className="text-[11px] text-slate-500">ผู้ติดต่อ: {cust.contactName || '-'}</p>
+                          <p className="text-[11px] text-slate-500 font-mono">{cust.contactPhone || '-'}</p>
+                        </td>
+                        <td className="px-6 py-4 space-y-2 align-top">
+                          <div className="bg-slate-50/50 p-3 rounded-lg border border-slate-100 space-y-1">
+                            <p className="text-xs text-slate-700 leading-relaxed">
+                              <strong>ที่อยู่ลูกค้า:</strong> {cust.companyAddress || '-'}
+                            </p>
+                            {cust.contactDetails && (
+                              <p className="text-[11px] text-slate-500">
+                                <strong>รายละเอียดผู้ติดต่อเพิ่มเติม:</strong> {cust.contactDetails}
+                              </p>
+                            )}
+                            <div className="flex gap-4 pt-1.5 text-[10px] text-slate-500">
+                              <span>บริษัทคู่ค้า (พาร์ทเนอร์): <strong className="text-slate-800">{cust.partnerCompany || '-'}</strong></span>
+                              <span>พนักงานขาย: <strong className="text-blue-600">{cust.salesName || '-'}</strong></span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right align-top space-x-1 whitespace-nowrap">
+                          <button
+                            onClick={() => handleOpenHistory(cust)}
+                            className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg transition-colors border border-blue-150"
+                            title="ดูประวัติ"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenEdit(cust)}
+                            className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition-colors border border-slate-200"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(cust.id)}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg transition-colors border border-rose-100"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* View Mode: Icon (Grid of Customer Cards - Original view) */}
+          {viewMode === 'Icon' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredCustomers.map((cust) => {
+                const hasOverdue = hasDelayedClaims(cust.companyName);
+                const onsiteCount = onsiteJobs.filter(j => j.companyName.toLowerCase().trim() === cust.companyName.toLowerCase().trim()).length;
+                const oncallCount = oncallJobs.filter(j => j.companyName.toLowerCase().trim() === cust.companyName.toLowerCase().trim()).length;
+                const claimsCount = claims.filter(c => c.companyName.toLowerCase().trim() === cust.companyName.toLowerCase().trim()).length;
+
+                return (
+                  <div 
+                    key={cust.id} 
+                    className={`bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm hover:shadow-md hover:border-slate-300 transition-all hover:-translate-y-0.5 relative group ${
+                      hasOverdue ? 'border-rose-300 bg-rose-50/10' : ''
+                    }`}
+                  >
+                    {/* Delayed warning label */}
+                    {hasOverdue && (
+                      <span className="absolute top-4 right-4 bg-rose-100 text-rose-700 border border-rose-200 text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                        <ShieldAlert className="w-3 h-3" />
+                        มีของเคลมค้างเกิน 30 วัน
+                      </span>
+                    )}
+
+                    {/* Company Title */}
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <div className={`p-2 rounded-xl border ${hasOverdue ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                          <Building className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-slate-900 font-bold text-base group-hover:text-blue-600 transition-colors leading-tight">
+                          {cust.companyName}
+                        </h3>
+                      </div>
+                      {cust.partnerCompany && (
+                        <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wide">
+                          พาร์ทเนอร์: {cust.partnerCompany}
+                        </p>
+                      )}
+                      {cust.salesName && (
+                        <p className="text-[11px] font-bold text-slate-700 bg-blue-50/50 px-2 py-1 rounded-lg border border-blue-100/30 inline-block">
+                          พนักงานขาย: <span className="text-blue-600">{cust.salesName}</span>
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Details list */}
+                    <div className="space-y-1.5 text-xs text-slate-600 border-t border-slate-100 pt-3">
+                      <p className="flex items-start gap-1.5">
+                        <User className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                        <span>ผู้ติดต่อ: <strong className="text-slate-800">{cust.contactName || '-'}</strong> {cust.contactDetails ? `(${cust.contactDetails})` : ''}</span>
+                      </p>
+                      <p className="flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>โทรศัพท์: <strong className="text-slate-800">{cust.contactPhone || '-'}</strong></span>
+                      </p>
+                      <p className="flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">อีเมล: {cust.contactEmail || '-'}</span>
+                      </p>
+                      {cust.companyAddress && (
+                        <p className="flex items-start gap-1.5 pt-1 text-slate-500">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                          <span className="line-clamp-2">{cust.companyAddress}</span>
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Counter Summaries */}
+                    <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-150 text-center text-[10px]">
+                      <div>
+                        <span className="text-slate-500 block font-semibold uppercase">Onsite</span>
+                        <span className="text-sm font-bold text-slate-800 font-mono">{onsiteCount} ครั้ง</span>
+                      </div>
+                      <div className="border-x border-slate-200">
+                        <span className="text-slate-500 block font-semibold uppercase">Oncall</span>
+                        <span className="text-sm font-bold text-slate-800 font-mono">{oncallCount} ครั้ง</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block font-semibold uppercase">เคลมสินค้า</span>
+                        <span className={`text-sm font-bold font-mono ${hasOverdue ? 'text-rose-600 font-black' : 'text-slate-800'}`}>
+                          {claimsCount} ชิ้น
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Actions Row */}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                      <button
+                        onClick={() => handleOpenHistory(cust)}
+                        className="flex items-center gap-1 text-xs bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white px-3 py-1.5 rounded-lg border border-blue-100 hover:border-blue-600 transition-all font-semibold"
+                      >
+                        <History className="w-3.5 h-3.5" />
+                        <span>ประวัติบริการย้อนหลัง</span>
+                        <ArrowUpRight className="w-3 h-3" />
+                      </button>
+
+                      <div className="flex space-x-1">
+                        <button
+                          id={`edit-cust-btn-${cust.id}`}
+                          onClick={() => handleOpenEdit(cust)}
+                          className="p-1.5 bg-slate-50 hover:bg-slate-150 text-slate-600 hover:text-slate-900 rounded-lg transition-colors border border-slate-200"
+                          title="แก้ไขรายชื่อลูกค้า"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          id={`delete-cust-btn-${cust.id}`}
+                          onClick={() => handleDelete(cust.id)}
+                          className="p-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg transition-colors border border-rose-100 hover:border-rose-600"
+                          title="ลบรายชื่อลูกค้า"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* View Mode: List (Minimalist text row list) */}
+          {viewMode === 'List' && (
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
+                      <th className="px-4 py-2.5">ชื่อบริษัทลูกค้า</th>
+                      <th className="px-4 py-2.5">ผู้ติดต่อหลัก</th>
+                      <th className="px-4 py-2.5">เบอร์โทรศัพท์</th>
+                      <th className="px-4 py-2.5">พนักงานขาย</th>
+                      <th className="px-4 py-2.5 text-right">การจัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                    {filteredCustomers.map((cust) => (
+                      <tr key={cust.id} className="hover:bg-slate-50/55 transition-colors cursor-pointer" onClick={() => handleOpenHistory(cust)}>
+                        <td className="px-4 py-2 font-bold text-slate-900">{cust.companyName}</td>
+                        <td className="px-4 py-2 text-slate-600">{cust.contactName || '-'}</td>
+                        <td className="px-4 py-2 font-mono text-[11px] text-slate-600">{cust.contactPhone || '-'}</td>
+                        <td className="px-4 py-2 text-slate-600">{cust.salesName || '-'}</td>
+                        <td className="px-4 py-2 text-right space-x-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <button onClick={() => handleOpenHistory(cust)} className="text-blue-600 hover:text-blue-950 text-[11px]">ประวัติ</button>
+                          <button onClick={() => handleOpenEdit(cust)} className="text-slate-600 hover:text-slate-900 text-[11px]">แก้ไข</button>
+                          <button onClick={() => handleDelete(cust.id)} className="text-rose-600 hover:text-rose-900 text-[11px]">ลบ</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -579,6 +801,80 @@ export const CustomerPanel: React.FC = () => {
                     placeholder="jitdee@techsolutions.com"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-900 focus:outline-none focus:border-blue-500"
                   />
+                </div>
+              </div>
+
+              <div className="space-y-1.5 text-left pt-2 border-t border-slate-150">
+                <label className="text-xs font-semibold text-slate-600">พนักงานขาย (เซลส์ผู้รับผิดชอบ)</label>
+                <div className="flex gap-2">
+                  <select
+                    value={salesName}
+                    onChange={(e) => setSalesName(e.target.value)}
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-900 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">-- เลือกพนักงานขาย --</option>
+                    {(lookups.salespersons || []).map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                {/* Add/Delete inline salesperson names */}
+                <div className="mt-2 bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">จัดการรายชื่อพนักงานขายในระบบ</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      id="new-sales-input"
+                      placeholder="ระบุชื่อพนักงานขายใหม่..."
+                      className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = (e.target as HTMLInputElement).value.trim();
+                          if (val) {
+                            await addLookupItem('salespersons', val);
+                            (e.target as HTMLInputElement).value = '';
+                            setSalesName(val);
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const inputEl = document.getElementById('new-sales-input') as HTMLInputElement;
+                        const val = inputEl?.value.trim();
+                        if (val) {
+                          await addLookupItem('salespersons', val);
+                          inputEl.value = '';
+                          setSalesName(val);
+                        }
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs font-bold transition-colors"
+                    >
+                      เพิ่ม
+                    </button>
+                  </div>
+                  
+                  {salesName && (lookups.salespersons || []).includes(salesName) && (
+                    <div className="flex items-center justify-between bg-white px-3 py-1.5 rounded-lg border border-slate-200 mt-1 shadow-2xs">
+                      <span className="text-xs text-slate-700 font-medium">ชื่อพนักงานขาย: {salesName}</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (confirm(`ต้องการลบรายชื่อพนักงานขาย "${salesName}" ออกจากระบบหรือไม่?`)) {
+                            const toRemove = salesName;
+                            setSalesName('');
+                            await deleteLookupItem('salespersons', toRemove);
+                          }
+                        }}
+                        className="text-rose-600 hover:text-rose-700 text-[10px] font-bold uppercase transition-colors"
+                      >
+                        ลบชื่อนี้ออก
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 

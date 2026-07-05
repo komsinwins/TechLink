@@ -8,12 +8,13 @@ export function calculateDaysBetween(startDateStr: string, endDateStr: string): 
   const start = new Date(startDateStr);
   const end = new Date(endDateStr);
   
-  if (isNaN(start.getTime()) || !isNaN(end.getTime())) {
-    const diffTime = end.getTime() - start.getTime();
-    if (diffTime < 0) return 0;
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return 0;
   }
-  return 0;
+  
+  const diffTime = end.getTime() - start.getTime();
+  if (diffTime < 0) return 0;
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
 export function parseWarrantyPeriodToMonths(periodStr: string): number {
@@ -90,20 +91,23 @@ export function calculateRemainingWarranty(purchaseDateStr: string, periodStr: s
   };
 }
 
-export function isJobOverdue(assignedDateStr: string, status: string, daysLimit = 7): boolean {
-  if (!assignedDateStr || status === 'Completed') return false;
+export function isJobOverdue(assignedDateStr: string, status: string, closeDateStr?: string): boolean {
+  if (!assignedDateStr) return false;
   
   const assigned = new Date(assignedDateStr);
   if (isNaN(assigned.getTime())) return false;
   
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  assigned.setHours(0, 0, 0, 0);
+  // If the job is completed, compare with closeDate. Otherwise, compare with today's date.
+  const end = (status === 'Completed' && closeDateStr) ? new Date(closeDateStr) : new Date();
+  if (isNaN(end.getTime())) return false;
   
-  const diffTime = today.getTime() - assigned.getTime();
+  assigned.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  
+  const diffTime = end.getTime() - assigned.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
-  return diffDays > daysLimit;
+  return diffDays > 30;
 }
 
 export function isClaimOverdue(receivedDateStr: string, status: string, daysLimit = 30): boolean {

@@ -22,8 +22,8 @@ interface FirebaseContextType {
   user: User | null;
   loading: boolean;
   lookups: LookupTypes;
-  addLookupItem: (category: 'onsiteServiceTypes' | 'oncallProductTypes' | 'claimProductTypes', item: string) => Promise<void>;
-  deleteLookupItem: (category: 'onsiteServiceTypes' | 'oncallProductTypes' | 'claimProductTypes', item: string) => Promise<void>;
+  addLookupItem: (category: keyof LookupTypes, item: string) => Promise<void>;
+  deleteLookupItem: (category: keyof LookupTypes, item: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, pass: string) => Promise<void>;
   signUpWithEmail: (email: string, pass: string, displayName?: string) => Promise<void>;
@@ -36,7 +36,10 @@ const FirebaseContext = createContext<FirebaseContextType | undefined>(undefined
 const defaultLookups: LookupTypes = {
   onsiteServiceTypes: ["Installation", "Preventive Maintenance", "Hardware Repair", "Software Support", "Network Setup"],
   oncallProductTypes: ["Server Admin", "Network Switch", "Firewall Policy", "Backup & Restore", "Software License"],
-  claimProductTypes: ["IP Camera", "PoE Switch", "UPS Battery", "Hard Drive", "Network Router"]
+  claimProductTypes: ["IP Camera", "PoE Switch", "UPS Battery", "Hard Drive", "Network Router"],
+  salespersons: ["สมชาย (Sales)", "สมศรี (Sales)", "วิชัย (Sales)", "สุรพงษ์ (Sales)"],
+  technicians: ["ช่างสมยศ", "ช่างอุดม", "ช่างมานะ", "ช่างวิรัช", "ช่างเกรียงไกร"],
+  equipmentList: ["NVR 16CH", "IP Camera 4MP", "PoE Switch 8 Port", "SFP Module 1G", "Fiber Optic Patch Cord", "Router Board", "UPS 1000VA"]
 };
 
 const guestUser = {
@@ -79,7 +82,11 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const docRef = doc(db, 'settings', 'lookups');
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setLookups(docSnap.data() as LookupTypes);
+          const data = docSnap.data();
+          setLookups({
+            ...defaultLookups,
+            ...data
+          } as LookupTypes);
         } else {
           // Save defaults if not present
           await setDoc(docRef, {
@@ -137,16 +144,16 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const addLookupItem = async (
-    category: 'onsiteServiceTypes' | 'oncallProductTypes' | 'claimProductTypes',
+    category: keyof LookupTypes,
     item: string
   ) => {
     const trimmed = item.trim();
     if (!trimmed) return;
     
-    const updatedValues = [...lookups[category]];
-    if (updatedValues.includes(trimmed)) return;
+    const currentList = lookups[category] || [];
+    if (currentList.includes(trimmed)) return;
     
-    updatedValues.push(trimmed);
+    const updatedValues = [...currentList, trimmed];
     const newLookups = { ...lookups, [category]: updatedValues };
     
     setLookups(newLookups);
@@ -164,10 +171,11 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const deleteLookupItem = async (
-    category: 'onsiteServiceTypes' | 'oncallProductTypes' | 'claimProductTypes',
+    category: keyof LookupTypes,
     item: string
   ) => {
-    const updatedValues = lookups[category].filter(v => v !== item);
+    const currentList = lookups[category] || [];
+    const updatedValues = currentList.filter(v => v !== item);
     const newLookups = { ...lookups, [category]: updatedValues };
     
     setLookups(newLookups);

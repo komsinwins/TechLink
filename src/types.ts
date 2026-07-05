@@ -15,6 +15,8 @@ export interface OnsiteService {
   serviceType: string;
   onsiteLocation: string;
   techName: string;
+  techName1?: string;
+  techName2?: string;
   salesName: string;
   assignedDate: string; // YYYY-MM-DD
   actionDate: string;   // YYYY-MM-DD
@@ -22,9 +24,14 @@ export interface OnsiteService {
   workingDays: number;  // computed: fixedDate - actionDate
   repairDuration: number; // computed: fixedDate - assignedDate
   symptomReport: string;
-  inspectionCause: string;
-  solution: string;
-  notes: string;
+  inspectionCause: string; // Represents "การตรวจสอบ" (Inspection Details)
+  cause?: string;          // Represents "สาเหตุ" (Cause)
+  reportedEquipment?: string; // "อุปกรณ์ที่รับแจ้ง"
+  closeDate?: string;       // "วันที่ปิดงาน"
+  reportFileUrl?: string;   // Attached report file URL/Name
+  reportFileName?: string;  // Attached report file name
+  solution?: string;
+  notes?: string;
   status: 'Pending' | 'In Progress' | 'Completed';
   photos: PhotoItem[]; // Up to 4 photos
   createdAt: string;
@@ -93,6 +100,7 @@ export interface Customer {
   contactPhone: string;
   contactEmail: string;
   partnerCompany?: string;
+  salesName?: string; // New salesperson field
   createdAt: string;
   updatedAt: string;
 }
@@ -101,4 +109,7 @@ export interface LookupTypes {
   onsiteServiceTypes: string[];
   oncallProductTypes: string[];
   claimProductTypes: string[];
+  salespersons?: string[];    // Dynamic sales list
+  technicians?: string[];     // Dynamic technician list
+  equipmentList?: string[];   // Dynamic equipment list
 }

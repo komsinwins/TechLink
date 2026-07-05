@@ -15,7 +15,7 @@ import {
 import { 
   Plus, Edit2, Trash2, Clipboard, Calendar, Clock, AlertTriangle, 
   Search, CheckCircle, X, ChevronRight, User as UserIcon, Tag, Printer, Image as ImageIcon,
-  Upload, Download
+  Upload, Download, LayoutGrid, LayoutList, Menu, FileText
 } from 'lucide-react';
 import { calculateDaysBetween, calculateRemainingWarranty, isClaimOverdue } from '../utils/date';
 import { techPresetImages } from '../utils/mockImages';
@@ -27,6 +27,7 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState('All');
+  const [viewMode, setViewMode] = useState<'View' | 'content' | 'Icon' | 'List'>('View');
   
   // Custom CSV and Print states
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -179,6 +180,10 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
   const [activeClaim, setActiveClaim] = useState<Claim | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
+  // Autocomplete suggestions state
+  const [dbCustomers, setDbCustomers] = useState<any[]>([]);
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+
   // Dynamic product type inline add
   const [newCustomClaimType, setNewCustomClaimType] = useState('');
   const [showAddClaimType, setShowAddClaimType] = useState(false);
@@ -235,8 +240,23 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
     }
   };
 
+  const fetchDbCustomers = async () => {
+    try {
+      const q = query(collection(db, 'customers'), orderBy('companyName'));
+      const snapshot = await getDocs(q);
+      const list: any[] = [];
+      snapshot.forEach(docSnap => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setDbCustomers(list);
+    } catch (err) {
+      console.error("Error fetching customers for autocomplete:", err);
+    }
+  };
+
   useEffect(() => {
     fetchClaims();
+    fetchDbCustomers();
   }, []);
 
   useEffect(() => {
@@ -378,6 +398,7 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
             updatedAt: new Date().toISOString()
           });
         }
+        fetchDbCustomers();
       }
       setShowFormModal(false);
       fetchClaims();
@@ -472,6 +493,30 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
               </button>
             ))}
           </div>
+
+          {/* View Mode selectors */}
+          <div className="flex bg-slate-50 border border-slate-200 rounded-xl p-1 shrink-0 flex-wrap">
+            {([
+              { key: 'View', label: 'View', icon: Menu },
+              { key: 'content', label: 'content', icon: FileText },
+              { key: 'Icon', label: 'Icon', icon: LayoutGrid },
+              { key: 'List', label: 'List', icon: LayoutList }
+            ] as const).map(({ key, label, icon: IconComponent }) => (
+              <button
+                key={key}
+                onClick={() => setViewMode(key)}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                  viewMode === key
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title={label}
+              >
+                <IconComponent className="w-3.5 h-3.5" />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
@@ -533,133 +578,320 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
             ไม่มีบันทึกการส่งเคลมสินค้าที่ตรงเงื่อนไข
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 tracking-wider uppercase">
-                  <th className="px-6 py-4">ลูกค้าผู้เคลม</th>
-                  <th className="px-6 py-4">อุปกรณ์สินค้า</th>
-                  <th className="px-6 py-4">S/N / รุ่น</th>
-                  <th className="px-6 py-4">สถานะประกัน</th>
-                  <th className="px-6 py-4">วันที่รับเคลม</th>
-                  <th className="px-6 py-4">ผู้เช็ค / อาคาร</th>
-                  <th className="px-6 py-4">สถานะเคลม</th>
-                  <th className="px-6 py-4 text-center">รายงาน</th>
-                  <th className="px-6 py-4 text-right">จัดการ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+          <div className="p-1">
+            {/* View Mode: View (Detailed Grid Table) */}
+            {viewMode === 'View' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 tracking-wider uppercase">
+                      <th className="px-6 py-4">ลูกค้าผู้เคลม</th>
+                      <th className="px-6 py-4">อุปกรณ์สินค้า</th>
+                      <th className="px-6 py-4">S/N / รุ่น</th>
+                      <th className="px-6 py-4">สถานะประกัน</th>
+                      <th className="px-6 py-4">วันที่รับเคลม</th>
+                      <th className="px-6 py-4">ผู้เช็ค / อาคาร</th>
+                      <th className="px-6 py-4">สถานะเคลม</th>
+                      <th className="px-6 py-4 text-center">รายงาน</th>
+                      <th className="px-6 py-4 text-right">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                    {filteredClaims.map((claim) => {
+                      const isOver = isClaimOverdue(claim.receivedClaimDate, claim.claimStatus);
+                      const warranty = calculateRemainingWarranty(claim.purchaseDate, claim.warrantyPeriod);
+                      return (
+                         <tr 
+                          key={claim.id} 
+                          className={`hover:bg-slate-50/80 transition-colors ${
+                            isOver ? 'bg-rose-50/50 hover:bg-rose-50' : ''
+                          }`}
+                        >
+                          <td className="px-6 py-4 space-y-1 text-left">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 text-sm">{claim.companyName}</span>
+                              {isOver && (
+                                <span className="bg-rose-100 text-rose-700 border border-rose-200 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 animate-pulse">
+                                  <AlertTriangle className="w-2.5 h-2.5" />
+                                  เกิน 30 วัน
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500">ติดต่อ: {claim.contactName} ({claim.contactPhone})</p>
+                          </td>
+                          <td className="px-6 py-4 space-y-0.5 text-left">
+                            <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full text-[10px] font-bold text-slate-700">
+                              {claim.productType}
+                            </span>
+                            <p className="text-slate-900 font-semibold pt-1">{claim.productBrand}</p>
+                          </td>
+                          <td className="px-6 py-4 space-y-0.5 text-left">
+                            <span className="font-mono bg-slate-50 border border-slate-200 text-slate-800 font-bold px-1.5 py-0.5 rounded text-[10px]">
+                              {claim.serialNumber}
+                            </span>
+                            <p className="text-[11px] text-slate-500">รุ่น: {claim.model || '-'}</p>
+                          </td>
+                          <td className="px-6 py-4 max-w-[150px] text-left">
+                            <span className={`inline-block font-semibold text-[10px] ${
+                              warranty.isExpired ? 'text-rose-600' : 'text-emerald-600 font-bold'
+                            }`}>
+                              {warranty.text}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 font-mono text-slate-700 text-left">
+                            {claim.receivedClaimDate}
+                          </td>
+                          <td className="px-6 py-4 space-y-0.5 text-left">
+                            <p className="text-slate-900 font-bold">{claim.inspectorName || '-'}</p>
+                            <p className="text-[11px] text-slate-500">อาคาร: {claim.claimBuilding || '-'}</p>
+                          </td>
+                          <td className="px-6 py-4 text-left">
+                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                              claim.claimStatus === 'Completed'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : claim.claimStatus === 'Ready for Return'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : claim.claimStatus === 'Sent to Vendor'
+                                ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                : claim.claimStatus === 'Checking'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                : 'bg-slate-100 text-slate-800 border border-slate-200'
+                            }`}>
+                              {claim.claimStatus === 'Completed' ? 'เสร็จสิ้น' : claim.claimStatus === 'Ready for Return' ? 'พร้อมรับคืน' : claim.claimStatus === 'Sent to Vendor' ? 'ส่งซัพพลายเออร์' : claim.claimStatus === 'Checking' ? 'กำลังตรวจสอบ' : 'รับเคลมสินค้า'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button
+                              id={`report-btn-${claim.id}`}
+                              onClick={() => handleOpenReport(claim)}
+                              className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded-lg border border-slate-200 hover:border-blue-300 transition-all"
+                              title="ดูรายงานเคลมสินค้า"
+                            >
+                              <Clipboard className="w-4.5 h-4.5" />
+                            </button>
+                          </td>
+                          <td className="px-6 py-4 text-right space-x-1 whitespace-nowrap">
+                            <button
+                              id={`edit-claim-btn-${claim.id}`}
+                              onClick={() => handleOpenEdit(claim)}
+                              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 rounded-lg transition-colors border border-slate-200"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              id={`delete-claim-btn-${claim.id}`}
+                              onClick={() => handleDelete(claim.id)}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-lg transition-colors border border-rose-200"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* View Mode: content (Content focused view focusing on claim issues & actions) */}
+            {viewMode === 'content' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 tracking-wider uppercase">
+                      <th className="px-6 py-4">ลูกค้า & สินค้า</th>
+                      <th className="px-6 py-4">ปัญหาเคลม & ข้อมูลการส่งเคลม (Content)</th>
+                      <th className="px-6 py-4 text-center">รายงาน</th>
+                      <th className="px-6 py-4 text-right">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                    {filteredClaims.map((claim) => (
+                      <tr 
+                        key={claim.id} 
+                        className="hover:bg-slate-50/70 transition-colors"
+                      >
+                        <td className="px-6 py-4 space-y-1.5 align-top w-1/4">
+                          <p className="font-bold text-slate-900 text-sm">{claim.companyName}</p>
+                          <div className="space-y-0.5">
+                            <p className="text-slate-700 font-semibold">{claim.productBrand} ({claim.productType})</p>
+                            <p className="text-[10px] font-mono text-slate-500">S/N: {claim.serialNumber}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 space-y-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+                              <span className="text-[10px] font-bold text-blue-700 block mb-1">ข้อมูลเคลมและสถานที่ส่ง</span>
+                              <p className="text-slate-700 leading-relaxed text-xs">สถานที่เคลม: <span className="font-semibold text-slate-900">{claim.claimDestination || '-'}</span></p>
+                              {claim.notes && <p className="text-slate-500 text-[11px] mt-1">หมายเหตุ: {claim.notes}</p>}
+                            </div>
+                            <div className="bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+                              <span className="text-[10px] font-bold text-emerald-700 block mb-1">การตรวจเช็คและส่งกลับ</span>
+                              <p className="text-slate-700 leading-relaxed text-xs">ผู้เช็คสอบ: <span className="font-semibold text-slate-900">{claim.inspectorName || '-'}</span> (อาคาร {claim.claimBuilding || '-'})</p>
+                              <p className="text-[11px] text-slate-500 mt-1">วันที่ส่งคืน: {claim.returnedClaimDate || '-'}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-4 text-[10px] text-slate-500">
+                            <span>วันที่รับเคลม: <strong className="text-slate-700">{claim.receivedClaimDate}</strong></span>
+                            <span>สถานะปัจจุบัน: <strong className="text-slate-900">{claim.claimStatus}</strong></span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center align-top">
+                          <button
+                            onClick={() => handleOpenReport(claim)}
+                            className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded-lg border border-slate-200 transition-all"
+                          >
+                            <Clipboard className="w-4.5 h-4.5" />
+                          </button>
+                        </td>
+                        <td className="px-6 py-4 text-right align-top space-x-1 whitespace-nowrap">
+                          <button
+                            onClick={() => handleOpenEdit(claim)}
+                            className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition-colors border border-slate-200"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(claim.id)}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg transition-colors border border-rose-100"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* View Mode: Icon (Grid Card style) */}
+            {viewMode === 'Icon' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
                 {filteredClaims.map((claim) => {
                   const isOver = isClaimOverdue(claim.receivedClaimDate, claim.claimStatus);
                   const warranty = calculateRemainingWarranty(claim.purchaseDate, claim.warrantyPeriod);
                   return (
-                     <tr 
+                    <div 
                       key={claim.id} 
-                      className={`hover:bg-slate-50/80 transition-colors ${
-                        isOver ? 'bg-rose-50/50 hover:bg-rose-50' : ''
+                      className={`bg-white border rounded-2xl p-5 shadow-xs space-y-4 hover:shadow-md transition-all flex flex-col justify-between ${
+                        isOver ? 'border-rose-200 bg-rose-50/5' : 'border-slate-200'
                       }`}
                     >
-                      {/* Customer info */}
-                      <td className="px-6 py-4 space-y-1 text-left">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900 text-sm">{claim.companyName}</span>
-                          {isOver && (
-                            <span className="bg-rose-100 text-rose-700 border border-rose-200 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 animate-pulse">
-                              <AlertTriangle className="w-2.5 h-2.5" />
-                              เกิน 30 วัน
-                            </span>
-                          )}
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="text-[10px] font-mono bg-blue-50 text-blue-700 font-bold px-2.5 py-0.5 rounded">
+                            Claim ID
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                            claim.claimStatus === 'Completed' ? 'bg-emerald-100 text-emerald-800' :
+                            claim.claimStatus === 'Ready for Return' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-800'
+                          }`}>
+                            {claim.claimStatus === 'Completed' ? 'เสร็จสิ้น' : claim.claimStatus === 'Ready for Return' ? 'พร้อมคืน' : claim.claimStatus === 'Sent to Vendor' ? 'ส่งนอก' : claim.claimStatus === 'Checking' ? 'เช็คสอบ' : 'รับเคลม'}
+                          </span>
                         </div>
-                        <p className="text-[11px] text-slate-500">ติดต่อ: {claim.contactName} ({claim.contactPhone})</p>
-                      </td>
 
-                      {/* Equipment Type */}
-                      <td className="px-6 py-4 space-y-0.5 text-left">
-                        <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full text-[10px] font-bold text-slate-700">
-                          {claim.productType}
-                        </span>
-                        <p className="text-slate-900 font-semibold pt-1">{claim.productBrand}</p>
-                      </td>
+                        <div className="space-y-1">
+                          <h4 className="font-bold text-slate-900 text-base line-clamp-1">{claim.companyName}</h4>
+                          <p className="text-xs text-slate-700 font-semibold">{claim.productBrand} ({claim.productType})</p>
+                          <p className="text-xs text-slate-500 font-mono">S/N: {claim.serialNumber}</p>
+                          <span className={`inline-block text-[10px] font-semibold ${warranty.isExpired ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            {warranty.text}
+                          </span>
+                        </div>
 
-                      {/* Serial Number / Model */}
-                      <td className="px-6 py-4 space-y-0.5 text-left">
-                        <span className="font-mono bg-slate-50 border border-slate-200 text-slate-800 font-bold px-1.5 py-0.5 rounded text-[10px]">
-                          {claim.serialNumber}
-                        </span>
-                        <p className="text-[11px] text-slate-500">รุ่น: {claim.model || '-'}</p>
-                      </td>
+                        {claim.notes && (
+                          <div className="bg-slate-50 p-2.5 rounded-lg">
+                            <span className="text-[9px] text-slate-400 font-bold block mb-0.5">รายละเอียดเพิ่มเติม</span>
+                            <p className="text-xs text-slate-600 line-clamp-2">{claim.notes}</p>
+                          </div>
+                        )}
+                      </div>
 
-                      {/* Warranty */}
-                      <td className="px-6 py-4 max-w-[150px] text-left">
-                        <span className={`inline-block font-semibold text-[10px] ${
-                          warranty.isExpired ? 'text-rose-600' : 'text-emerald-600 font-bold'
-                        }`}>
-                          {warranty.text}
-                        </span>
-                      </td>
-
-                      {/* Received date */}
-                      <td className="px-6 py-4 font-mono text-slate-700 text-left">
-                        {claim.receivedClaimDate}
-                      </td>
-
-                      {/* Inspector / Location */}
-                      <td className="px-6 py-4 space-y-0.5 text-left">
-                        <p className="text-slate-900 font-bold">{claim.inspectorName || '-'}</p>
-                        <p className="text-[11px] text-slate-500">อาคาร: {claim.claimBuilding || '-'}</p>
-                      </td>
-
-                      {/* Claim Status */}
-                      <td className="px-6 py-4 text-left">
-                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                          claim.claimStatus === 'Completed'
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                            : claim.claimStatus === 'Ready for Return'
-                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                            : claim.claimStatus === 'Sent to Vendor'
-                            ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                            : claim.claimStatus === 'Checking'
-                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                            : 'bg-slate-100 text-slate-800 border border-slate-200'
-                        }`}>
-                          {claim.claimStatus === 'Completed' ? 'เสร็จสิ้น' : claim.claimStatus === 'Ready for Return' ? 'พร้อมรับคืน' : claim.claimStatus === 'Sent to Vendor' ? 'ส่งซัพพลายเออร์' : claim.claimStatus === 'Checking' ? 'กำลังตรวจสอบ' : 'รับเคลมสินค้า'}
-                        </span>
-                      </td>
-
-                      {/* Report generation icon */}
-                      <td className="px-6 py-4 text-center">
-                        <button
-                          id={`report-btn-${claim.id}`}
-                          onClick={() => handleOpenReport(claim)}
-                          className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-blue-600 rounded-lg border border-slate-200 hover:border-blue-300 transition-all"
-                          title="ดูรายงานเคลมสินค้า"
-                        >
-                          <Clipboard className="w-4.5 h-4.5" />
-                        </button>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-6 py-4 text-right space-x-1 whitespace-nowrap">
-                        <button
-                          id={`edit-claim-btn-${claim.id}`}
-                          onClick={() => handleOpenEdit(claim)}
-                          className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 rounded-lg transition-colors border border-slate-200"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          id={`delete-claim-btn-${claim.id}`}
-                          onClick={() => handleDelete(claim.id)}
-                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-lg transition-colors border border-rose-200"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                        <span className="text-[10px] text-slate-400">ผู้ตรวจสอบ: {claim.inspectorName || '-'}</span>
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => handleOpenReport(claim)}
+                            title="ดูใบรายงาน"
+                            className="p-1.5 bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white rounded-lg border border-blue-100 transition-colors"
+                          >
+                            <Clipboard className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenEdit(claim)}
+                            className="p-1.5 bg-slate-50 hover:bg-slate-150 text-slate-600 hover:text-slate-900 rounded-lg transition-colors border border-slate-200"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(claim.id)}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg transition-colors border border-rose-100"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            )}
+
+            {/* View Mode: List (Minimalist text row list) */}
+            {viewMode === 'List' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
+                      <th className="px-4 py-2.5">ลูกค้าผู้เคลม</th>
+                      <th className="px-4 py-2.5">อุปกรณ์สินค้า</th>
+                      <th className="px-4 py-2.5">S/N</th>
+                      <th className="px-4 py-2.5">วันที่รับ</th>
+                      <th className="px-4 py-2.5">สถานะ</th>
+                      <th className="px-4 py-2.5 text-right">การจัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                    {filteredClaims.map((claim) => (
+                      <tr 
+                        key={claim.id} 
+                        className="hover:bg-slate-50/55 transition-colors cursor-pointer"
+                        onClick={() => handleOpenReport(claim)}
+                      >
+                        <td className="px-4 py-2 font-bold text-slate-900">{claim.companyName}</td>
+                        <td className="px-4 py-2 text-slate-600">{claim.productBrand} ({claim.productType})</td>
+                        <td className="px-4 py-2 font-mono text-[11px] text-slate-600">{claim.serialNumber}</td>
+                        <td className="px-4 py-2 font-mono text-[11px] text-slate-500">{claim.receivedClaimDate}</td>
+                        <td className="px-4 py-2">
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                            claim.claimStatus === 'Completed' ? 'bg-emerald-100 text-emerald-800' :
+                            claim.claimStatus === 'Ready for Return' ? 'bg-blue-100 text-blue-800' : 'bg-slate-150 text-slate-800'
+                          }`}>
+                            {claim.claimStatus === 'Completed' ? 'เสร็จสิ้น' : claim.claimStatus === 'Ready for Return' ? 'พร้อมคืน' : 'กำลังเคลม'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-right space-x-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => handleOpenEdit(claim)}
+                            className="text-slate-600 hover:text-slate-900 text-[11px]"
+                          >
+                            แก้ไข
+                          </button>
+                          <button
+                            onClick={() => handleDelete(claim.id)}
+                            className="text-rose-600 hover:text-rose-900 text-[11px]"
+                          >
+                            ลบ
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -691,16 +923,63 @@ export const ClaimPanel: React.FC<{ initialSearch?: string }> = ({ initialSearch
                 <h3 className="text-slate-800 font-bold text-sm tracking-wider uppercase border-b border-slate-200 pb-1.5">1. ข้อมูลผู้ส่งเคลมสินค้า</h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 relative">
                     <label className="text-xs font-semibold text-slate-600">ชื่อบริษัท / ร้านค้า *</label>
                     <input
                       type="text"
                       required
                       value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
+                      onChange={(e) => {
+                        setCompanyName(e.target.value);
+                        setShowCustomerSuggestions(true);
+                      }}
+                      onFocus={() => setShowCustomerSuggestions(true)}
                       placeholder="บริษัท คิงดอม เทรดดิ้ง จำกัด"
                       className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-900 focus:outline-none focus:border-blue-500"
                     />
+
+                    {showCustomerSuggestions && dbCustomers.length > 0 && (
+                      <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                        <div className="p-1.5 bg-slate-50 border-b border-slate-100 text-[10px] text-slate-500 font-bold flex justify-between items-center">
+                          <span>รายชื่อแนะนำจากฐานข้อมูลลูกค้า ({dbCustomers.filter(c => c.companyName?.toLowerCase().includes(companyName.toLowerCase())).length})</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowCustomerSuggestions(false)}
+                            className="text-slate-400 hover:text-slate-600"
+                          >
+                            ปิด
+                          </button>
+                        </div>
+                        {dbCustomers
+                          .filter(c => c.companyName?.toLowerCase().includes(companyName.toLowerCase()))
+                          .map((cust) => (
+                            <button
+                              key={cust.id}
+                              type="button"
+                              className="w-full text-left px-4 py-2 hover:bg-blue-50/50 border-b border-slate-100 last:border-b-0 transition-colors block"
+                              onClick={() => {
+                                setCompanyName(cust.companyName);
+                                setCompanyAddress(cust.companyAddress || '');
+                                setContactName(cust.contactName || '');
+                                setContactDetails(cust.contactDetails || '');
+                                setContactPhone(cust.contactPhone || '');
+                                setContactEmail(cust.contactEmail || '');
+                                setPartnerCompany(cust.partnerCompany || '');
+                                setShowCustomerSuggestions(false);
+                              }}
+                            >
+                              <div className="text-xs font-bold text-slate-800">{cust.companyName}</div>
+                              <div className="text-[10px] text-slate-500 flex justify-between">
+                                <span>ผู้ติดต่อ: {cust.contactName || '-'}</span>
+                                <span>โทร: {cust.contactPhone || '-'}</span>
+                              </div>
+                            </button>
+                          ))}
+                        {dbCustomers.filter(c => c.companyName?.toLowerCase().includes(companyName.toLowerCase())).length === 0 && (
+                          <div className="p-3 text-xs text-slate-400 text-center">ไม่พบข้อมูลในฐานข้อมูลลูกค้า (กรอกใหม่ได้เลย)</div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">

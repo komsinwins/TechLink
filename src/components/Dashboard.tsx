@@ -4,9 +4,23 @@ import { db } from '../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { 
   Laptop, PhoneCall, Clipboard, Users, AlertTriangle, 
-  ChevronRight, Activity, Zap
+  ChevronRight, Activity, Zap, BarChart3, PieChart as PieIcon, LineChart as LineIcon
 } from 'lucide-react';
 import { isJobOverdue, isClaimOverdue } from '../utils/date';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area
+} from 'recharts';
 
 interface DashboardProps {
   onNavigate: (tab: 'onsite' | 'oncall' | 'claim' | 'customer') => void;
@@ -79,6 +93,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSearchAcross
 
   const totalCustomers = customers.length;
   const totalOverdueAlertsCount = overdueOnsite + overdueOncall + overdueClaims;
+  const totalCompleted = completedOnsite + completedOncall + completedClaims;
+  const totalPending = pendingOnsite + pendingOncall + pendingClaims;
 
   if (loading) {
     return (
@@ -252,6 +268,121 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSearchAcross
           </div>
         </div>
 
+      </div>
+
+      {/* =======================================
+          STATISTICS GRAPH SECTION (EXCLUDING CUSTOMERS)
+          ======================================= */}
+      <div className="bg-white border border-slate-200 shadow-sm p-6 md:p-8 rounded-3xl space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold text-slate-950 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-blue-600" />
+              รายงานสถิติการปฏิบัติงาน (Operational Analytics)
+            </h3>
+            <p className="text-xs text-slate-500">
+              วิเคราะห์ภาพรวมประเภทบริการ อัตราความสำเร็จ และงานค้างส่งในระบบ (ไม่รวมฐานข้อมูลลูกค้า)
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Chart 1: Volume by Service Type */}
+          <div className="border border-slate-100 p-5 rounded-2xl bg-slate-50/40 space-y-4">
+            <div className="flex items-center gap-2 font-bold text-xs text-slate-800 uppercase tracking-wider">
+              <BarChart3 className="w-4 h-4 text-blue-500" />
+              ปริมาณงานแยกตามบริการ (Service Volume)
+            </div>
+            <div className="h-60">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={[
+                  { name: 'Onsite', จำนวน: totalOnsite, color: '#3b82f6' },
+                  { name: 'Oncall', จำนวน: totalOncall, color: '#f59e0b' },
+                  { name: 'Claim', จำนวน: totalClaims, color: '#ec4899' }
+                ]}>
+                  <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#64748b" fontSize={11} tickLine={false} allowDecimals={false} />
+                  <Tooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                  <Bar dataKey="จำนวน" radius={[4, 4, 0, 0]}>
+                    <Cell fill="#3b82f6" />
+                    <Cell fill="#f59e0b" />
+                    <Cell fill="#ec4899" />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Chart 2: Status distribution (Pie Chart) */}
+          <div className="border border-slate-100 p-5 rounded-2xl bg-slate-50/40 space-y-4">
+            <div className="flex items-center gap-2 font-bold text-xs text-slate-800 uppercase tracking-wider">
+              <PieIcon className="w-4 h-4 text-emerald-500" />
+              สัดส่วนสถานะการดำเนินงาน (Status Distribution)
+            </div>
+            <div className="h-60 flex flex-col justify-between">
+              <div className="h-44">
+                {totalCompleted + totalPending === 0 ? (
+                  <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                    ไม่มีข้อมูลงานสำหรับการวิเคราะห์
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'สำเร็จ', value: totalCompleted },
+                          { name: 'รอดำเนินการ', value: totalPending }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={70}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        <Cell fill="#10b981" />
+                        <Cell fill="#f59e0b" />
+                      </Pie>
+                      <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              <div className="flex justify-center gap-6 text-[11px] font-bold">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-emerald-500 block" />
+                  <span className="text-slate-600">เสร็จสิ้น ({totalCompleted})</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-amber-500 block" />
+                  <span className="text-slate-600">ค้างงาน ({totalPending})</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Chart 3: Overdue Analytics */}
+          <div className="border border-slate-100 p-5 rounded-2xl bg-slate-50/40 space-y-4">
+            <div className="flex items-center gap-2 font-bold text-xs text-slate-800 uppercase tracking-wider">
+              <LineIcon className="w-4 h-4 text-rose-500" />
+              งานล่าช้าเกินกำหนด (Overdue Analytics)
+            </div>
+            <div className="h-60">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={[
+                  { name: 'Onsite', ล่าช้า: overdueOnsite },
+                  { name: 'Oncall', ล่าช้า: overdueOncall },
+                  { name: 'Claim', ล่าช้า: overdueClaims }
+                ]}>
+                  <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#64748b" fontSize={11} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                  <Area type="monotone" dataKey="ล่าช้า" stroke="#f43f5e" fill="#ffe4e6" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Overdue alert summary breakdown list */}

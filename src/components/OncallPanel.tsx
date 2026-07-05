@@ -14,7 +14,8 @@ import {
 } from 'firebase/firestore';
 import { 
   Plus, Edit2, Trash2, PhoneCall, Calendar, Clock, AlertTriangle, 
-  Search, CheckCircle, X, ChevronRight, User as UserIcon, Upload, Download, Printer
+  Search, CheckCircle, X, ChevronRight, User as UserIcon, Upload, Download, Printer,
+  LayoutGrid, LayoutList, Menu, FileText
 } from 'lucide-react';
 import { calculateDaysBetween, isJobOverdue } from '../utils/date';
 import { parseCSV, generateCSV, downloadFile } from '../utils/csvHelper';
@@ -25,6 +26,7 @@ export const OncallPanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState('All');
+  const [viewMode, setViewMode] = useState<'View' | 'content' | 'Icon' | 'List'>('View');
   
   // Custom CSV and Print states
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -162,6 +164,10 @@ export const OncallPanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
   const [activeJob, setActiveJob] = useState<OncallService | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
+  // Autocomplete suggestions state
+  const [dbCustomers, setDbCustomers] = useState<any[]>([]);
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+
   // Dynamic product type inline add
   const [newCustomProductType, setNewCustomProductType] = useState('');
   const [showAddProductType, setShowAddProductType] = useState(false);
@@ -212,8 +218,23 @@ export const OncallPanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
     }
   };
 
+  const fetchDbCustomers = async () => {
+    try {
+      const q = query(collection(db, 'customers'), orderBy('companyName'));
+      const snapshot = await getDocs(q);
+      const list: any[] = [];
+      snapshot.forEach(docSnap => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setDbCustomers(list);
+    } catch (err) {
+      console.error("Error fetching customers for autocomplete:", err);
+    }
+  };
+
   useEffect(() => {
     fetchJobs();
+    fetchDbCustomers();
   }, []);
 
   useEffect(() => {
@@ -328,10 +349,12 @@ export const OncallPanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
             contactPhone,
             contactEmail,
             partnerCompany,
+            salesName,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           });
         }
+        fetchDbCustomers();
       }
       setShowFormModal(false);
       fetchJobs();
@@ -403,7 +426,7 @@ export const OncallPanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
             />
           </div>
 
-          <div className="flex bg-slate-50 border border-slate-200 rounded-xl p-1">
+          <div className="flex bg-slate-50 border border-slate-200 rounded-xl p-1 shrink-0 flex-wrap">
             {['All', 'Pending', 'In Progress', 'Completed'].map((st) => (
               <button
                 key={st}
@@ -415,6 +438,30 @@ export const OncallPanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
                 }`}
               >
                 {st === 'All' ? 'ทั้งหมด' : st === 'Pending' ? 'รอดำเนินการ' : st === 'In Progress' ? 'กำลังดำเนินการ' : 'เสร็จสมบูรณ์'}
+              </button>
+            ))}
+          </div>
+
+          {/* View Mode selectors */}
+          <div className="flex bg-slate-50 border border-slate-200 rounded-xl p-1 shrink-0 flex-wrap">
+            {([
+              { key: 'View', label: 'View', icon: Menu },
+              { key: 'content', label: 'content', icon: FileText },
+              { key: 'Icon', label: 'Icon', icon: LayoutGrid },
+              { key: 'List', label: 'List', icon: LayoutList }
+            ] as const).map(({ key, label, icon: IconComponent }) => (
+              <button
+                key={key}
+                onClick={() => setViewMode(key)}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                  viewMode === key
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title={label}
+              >
+                <IconComponent className="w-3.5 h-3.5" />
+                <span>{label}</span>
               </button>
             ))}
           </div>
@@ -479,119 +526,301 @@ export const OncallPanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
             ไม่มีบันทึกงาน Oncall Service ที่ตรงเงื่อนไข
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 tracking-wider uppercase">
-                  <th className="px-6 py-4">ลูกค้า / ผู้ติดต่อ</th>
-                  <th className="px-6 py-4">ประเภทผลิตภัณฑ์/ระบบ</th>
-                  <th className="px-6 py-4">ผู้ปฏิบัติงาน / เซลส์</th>
-                  <th className="px-6 py-4">วันที่แจ้ง / ปิดงาน</th>
-                  <th className="px-6 py-4">ระยะเวลาซ่อม</th>
-                  <th className="px-6 py-4">อาการเบื้องต้น</th>
-                  <th className="px-6 py-4">สถานะ</th>
-                  <th className="px-6 py-4 text-right">จัดการ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+          <div className="p-1">
+            {/* View Mode: View (Detailed Grid Table) */}
+            {viewMode === 'View' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 tracking-wider uppercase">
+                      <th className="px-6 py-4">ลูกค้า / ผู้ติดต่อ</th>
+                      <th className="px-6 py-4">ประเภทผลิตภัณฑ์/ระบบ</th>
+                      <th className="px-6 py-4">ผู้ปฏิบัติงาน / เซลส์</th>
+                      <th className="px-6 py-4">วันที่แจ้ง / ปิดงาน</th>
+                      <th className="px-6 py-4">ระยะเวลาซ่อม</th>
+                      <th className="px-6 py-4">อาการเบื้องต้น</th>
+                      <th className="px-6 py-4">สถานะ</th>
+                      <th className="px-6 py-4 text-right">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                    {filteredJobs.map((job) => {
+                      const isOver = isJobOverdue(job.assignedDate, job.status);
+                      return (
+                        <tr 
+                          key={job.id} 
+                          className={`hover:bg-slate-50/70 transition-colors cursor-pointer ${
+                            isOver ? 'bg-rose-50/20 hover:bg-rose-50/40' : ''
+                          }`}
+                          onClick={() => handleOpenDetail(job)}
+                        >
+                          <td className="px-6 py-4 space-y-1" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-2">
+                              <span 
+                                onClick={() => handleOpenDetail(job)}
+                                className="font-bold text-slate-900 text-sm hover:underline hover:text-blue-600 cursor-pointer"
+                              >
+                                {job.companyName}
+                              </span>
+                              {isOver && (
+                                <span className="bg-rose-50 text-rose-700 border border-rose-150 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 animate-pulse">
+                                  <AlertTriangle className="w-2.5 h-2.5" />
+                                  ค้าง &gt; 7 วัน
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500">ติดต่อ: {job.contactName} ({job.contactPhone})</p>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-full font-medium text-[11px] text-indigo-700">
+                              {job.productType}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 space-y-0.5">
+                            <div className="flex items-center gap-1">
+                              <UserIcon className="w-3.5 h-3.5 text-slate-400" />
+                              <span>ช่าง: <strong className="text-slate-900">{job.techName || '-'}</strong></span>
+                            </div>
+                            <p className="text-[11px] text-slate-500">เซลส์: {job.salesName || '-'}</p>
+                          </td>
+                          <td className="px-6 py-4 space-y-0.5 text-slate-500">
+                            <p className="text-[11px]">แจ้ง: <strong className="text-slate-800">{job.assignedDate}</strong></p>
+                            <p className="text-[11px]">ปิดงาน: <strong className="text-slate-800">{job.fixedDate || '-'}</strong></p>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="font-mono font-bold bg-slate-50 px-2.5 py-1 rounded text-slate-800 border border-slate-200">
+                              {job.repairDuration} วัน
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 max-w-[160px] truncate text-slate-600" title={job.symptomReport}>
+                            {job.symptomReport || '-'}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                              job.status === 'Completed'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                : job.status === 'In Progress'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                                : 'bg-blue-50 text-blue-700 border border-blue-100'
+                            }`}>
+                              {job.status === 'Completed' ? 'เสร็จงาน' : job.status === 'In Progress' ? 'กำลังแก้ไข' : 'รอดำเนินการ'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right space-x-1 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              id={`edit-oncall-btn-${job.id}`}
+                              onClick={() => handleOpenEdit(job)}
+                              className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition-colors border border-slate-200"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              id={`delete-oncall-btn-${job.id}`}
+                              onClick={() => handleDelete(job.id)}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg transition-colors border border-rose-100 hover:border-rose-600"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* View Mode: content (Content focused view focusing on Symptom Report & Solution) */}
+            {viewMode === 'content' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 tracking-wider uppercase">
+                      <th className="px-6 py-4">ลูกค้า / ผู้ติดต่อ</th>
+                      <th className="px-6 py-4">อาการรับแจ้ง & วิธีแก้ไข (Content)</th>
+                      <th className="px-6 py-4 text-right">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                    {filteredJobs.map((job) => (
+                      <tr 
+                        key={job.id} 
+                        className="hover:bg-slate-50/70 transition-colors cursor-pointer"
+                        onClick={() => handleOpenDetail(job)}
+                      >
+                        <td className="px-6 py-4 space-y-1 align-top w-1/4" onClick={(e) => e.stopPropagation()}>
+                          <p className="font-bold text-slate-900 text-sm hover:underline hover:text-blue-600" onClick={() => handleOpenDetail(job)}>{job.companyName}</p>
+                          <span className="bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded text-[10px] text-indigo-700 font-semibold block w-fit">
+                            {job.productType}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 space-y-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+                              <span className="text-[10px] font-bold text-indigo-700 uppercase block mb-1">อาการแจ้งเสีย (Oncall Symptom)</span>
+                              <p className="text-slate-700 leading-relaxed text-xs">{job.symptomReport || '-'}</p>
+                            </div>
+                            <div className="bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+                              <span className="text-[10px] font-bold text-emerald-700 uppercase block mb-1">แนวทางแก้ไข (Solution)</span>
+                              <p className="text-slate-700 leading-relaxed text-xs">{job.solution || '-'}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-4 text-[10px] text-slate-500">
+                            <span>ช่างให้คำปรึกษา: <strong className="text-slate-700">{job.techName || '-'}</strong></span>
+                            <span>วันที่โทรปรึกษา: <strong className="text-slate-700">{job.assignedDate}</strong></span>
+                            {job.notes && <span>บันทึกเพิ่มเติม: <span className="text-slate-600 font-mono">{job.notes}</span></span>}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right align-top space-x-1 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => handleOpenEdit(job)}
+                            className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition-colors border border-slate-200"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(job.id)}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg transition-colors border border-rose-100 hover:border-rose-600"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* View Mode: Icon (Grid Card style) */}
+            {viewMode === 'Icon' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
                 {filteredJobs.map((job) => {
                   const isOver = isJobOverdue(job.assignedDate, job.status);
                   return (
-                    <tr 
+                    <div 
                       key={job.id} 
-                      className={`hover:bg-slate-50/70 transition-colors cursor-pointer ${
-                        isOver ? 'bg-rose-50/20 hover:bg-rose-50/40' : ''
-                      }`}
                       onClick={() => handleOpenDetail(job)}
+                      className={`bg-white border rounded-2xl p-5 shadow-xs space-y-4 hover:shadow-md transition-all flex flex-col justify-between cursor-pointer ${
+                        isOver ? 'border-rose-200 bg-rose-50/5' : 'border-slate-200'
+                      }`}
                     >
-                      {/* Customer info */}
-                      <td className="px-6 py-4 space-y-1" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-2">
-                          <span 
-                            onClick={() => handleOpenDetail(job)}
-                            className="font-bold text-slate-900 text-sm hover:underline hover:text-blue-600 cursor-pointer"
-                          >
-                            {job.companyName}
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="text-[10px] font-mono bg-indigo-50 text-indigo-700 font-bold px-2.5 py-0.5 rounded">
+                            Oncall Log
                           </span>
-                          {isOver && (
-                            <span className="bg-rose-50 text-rose-700 border border-rose-150 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 animate-pulse">
-                              <AlertTriangle className="w-2.5 h-2.5" />
-                              ค้าง &gt; 7 วัน
-                            </span>
-                          )}
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                            job.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' :
+                            job.status === 'In Progress' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-800'
+                          }`}>
+                            {job.status === 'Completed' ? 'เสร็จงาน' : job.status === 'In Progress' ? 'กำลังแก้ไข' : 'รอดำเนินการ'}
+                          </span>
                         </div>
-                        <p className="text-[11px] text-slate-500">ติดต่อ: {job.contactName} ({job.contactPhone})</p>
-                      </td>
 
-                      {/* Product Type */}
-                      <td className="px-6 py-4">
-                        <span className="bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-full font-medium text-[11px] text-indigo-700">
-                          {job.productType}
-                        </span>
-                      </td>
-
-                      {/* Tech & Sales */}
-                      <td className="px-6 py-4 space-y-0.5">
-                        <div className="flex items-center gap-1">
-                          <UserIcon className="w-3.5 h-3.5 text-slate-400" />
-                          <span>ช่าง: <strong className="text-slate-900">{job.techName || '-'}</strong></span>
+                        <div className="space-y-1">
+                          <h4 className="font-bold text-slate-900 text-base line-clamp-1">{job.companyName}</h4>
+                          <p className="text-xs text-slate-500 flex items-center gap-1">
+                            <UserIcon className="w-3 h-3" />
+                            <span>ผู้ติดต่อ: {job.contactName || '-'} ({job.contactPhone || '-'})</span>
+                          </p>
+                          <span className="inline-block bg-slate-100 text-slate-600 text-[10px] px-2 py-0.5 rounded">
+                            ระบบ: {job.productType}
+                          </span>
                         </div>
-                        <p className="text-[11px] text-slate-500">เซลส์: {job.salesName || '-'}</p>
-                      </td>
 
-                      {/* Dates */}
-                      <td className="px-6 py-4 space-y-0.5 text-slate-500">
-                        <p className="text-[11px]">แจ้ง: <strong className="text-slate-800">{job.assignedDate}</strong></p>
-                        <p className="text-[11px]">ปิดงาน: <strong className="text-slate-800">{job.fixedDate || '-'}</strong></p>
-                      </td>
+                        <div className="bg-slate-50 p-3 rounded-lg space-y-1">
+                          <span className="text-[10px] text-slate-400 font-bold block">รายละเอียดอาการ</span>
+                          <p className="text-xs text-slate-700 line-clamp-2">{job.symptomReport || '-'}</p>
+                        </div>
+                      </div>
 
-                      {/* Duration */}
-                      <td className="px-6 py-4">
-                        <span className="font-mono font-bold bg-slate-50 px-2.5 py-1 rounded text-slate-800 border border-slate-200">
-                          {job.repairDuration} วัน
-                        </span>
-                      </td>
-
-                      {/* Symptom snippet */}
-                      <td className="px-6 py-4 max-w-[160px] truncate text-slate-600" title={job.symptomReport}>
-                        {job.symptomReport || '-'}
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                          job.status === 'Completed'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                            : job.status === 'In Progress'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                            : 'bg-blue-50 text-blue-700 border border-blue-100'
-                        }`}>
-                          {job.status === 'Completed' ? 'เสร็จงาน' : job.status === 'In Progress' ? 'กำลังแก้ไข' : 'รอดำเนินการ'}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-6 py-4 text-right space-x-1 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          id={`edit-oncall-btn-${job.id}`}
-                          onClick={() => handleOpenEdit(job)}
-                          className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg transition-colors border border-slate-200"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          id={`delete-oncall-btn-${job.id}`}
-                          onClick={() => handleDelete(job.id)}
-                          className="p-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg transition-colors border border-rose-100 hover:border-rose-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-[10px] text-slate-400">ช่างเทคนิค: {job.techName || '-'}</span>
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => handleOpenDetail(job)}
+                            className="p-1.5 bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white rounded-lg border border-indigo-100 transition-colors"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenEdit(job)}
+                            className="p-1.5 bg-slate-50 hover:bg-slate-150 text-slate-600 hover:text-slate-900 rounded-lg transition-colors border border-slate-200"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(job.id)}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg transition-colors border border-rose-100"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            )}
+
+            {/* View Mode: List (Minimalist text row list) */}
+            {viewMode === 'List' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
+                      <th className="px-4 py-2.5">ลูกค้า</th>
+                      <th className="px-4 py-2.5">ระบบ/ผลิตภัณฑ์</th>
+                      <th className="px-4 py-2.5">ช่างเทคนิค</th>
+                      <th className="px-4 py-2.5">วันที่โทรแจ้ง</th>
+                      <th className="px-4 py-2.5">สถานะ</th>
+                      <th className="px-4 py-2.5 text-right">การจัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                    {filteredJobs.map((job) => (
+                      <tr 
+                        key={job.id} 
+                        className="hover:bg-slate-50/55 transition-colors cursor-pointer"
+                        onClick={() => handleOpenDetail(job)}
+                      >
+                        <td className="px-4 py-2 font-bold text-slate-900" onClick={(e) => e.stopPropagation()}>
+                          <span onClick={() => handleOpenDetail(job)} className="hover:underline hover:text-blue-600 cursor-pointer">
+                            {job.companyName}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-slate-600">{job.productType}</td>
+                        <td className="px-4 py-2 text-slate-600">{job.techName || '-'}</td>
+                        <td className="px-4 py-2 text-slate-500 font-mono text-[11px]">{job.assignedDate}</td>
+                        <td className="px-4 py-2">
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                            job.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' :
+                            job.status === 'In Progress' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-800'
+                          }`}>
+                            {job.status === 'Completed' ? 'เสร็จงาน' : job.status === 'In Progress' ? 'กำลังทำ' : 'รอดำเนินการ'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-right space-x-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => handleOpenEdit(job)}
+                            className="text-slate-600 hover:text-slate-900 text-[11px]"
+                          >
+                            แก้ไข
+                          </button>
+                          <button
+                            onClick={() => handleDelete(job.id)}
+                            className="text-rose-600 hover:text-rose-900 text-[11px]"
+                          >
+                            ลบ
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -624,16 +853,66 @@ export const OncallPanel: React.FC<{ initialSearch?: string }> = ({ initialSearc
                 <h3 className="text-slate-800 font-bold text-sm tracking-wider uppercase border-b border-slate-200 pb-1.5">1. ข้อมูลผู้ติดต่อ & บริษัท</h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 relative">
                     <label className="text-xs font-semibold text-slate-600">ชื่อบริษัทลูกค้า *</label>
                     <input
                       type="text"
                       required
                       value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
+                      onChange={(e) => {
+                        setCompanyName(e.target.value);
+                        setShowCustomerSuggestions(true);
+                      }}
+                      onFocus={() => setShowCustomerSuggestions(true)}
                       placeholder="บริษัท ซิสเต็ม พาร์ทเนอร์ จำกัด"
                       className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-900 focus:outline-none focus:border-blue-500"
                     />
+
+                    {showCustomerSuggestions && dbCustomers.length > 0 && (
+                      <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                        <div className="p-1.5 bg-slate-50 border-b border-slate-100 text-[10px] text-slate-500 font-bold flex justify-between items-center">
+                          <span>รายชื่อแนะนำจากฐานข้อมูลลูกค้า ({dbCustomers.filter(c => c.companyName?.toLowerCase().includes(companyName.toLowerCase())).length})</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowCustomerSuggestions(false)}
+                            className="text-slate-400 hover:text-slate-600"
+                          >
+                            ปิด
+                          </button>
+                        </div>
+                        {dbCustomers
+                          .filter(c => c.companyName?.toLowerCase().includes(companyName.toLowerCase()))
+                          .map((cust) => (
+                            <button
+                              key={cust.id}
+                              type="button"
+                              className="w-full text-left px-4 py-2 hover:bg-blue-50/50 border-b border-slate-100 last:border-b-0 transition-colors block"
+                              onClick={() => {
+                                setCompanyName(cust.companyName);
+                                setCompanyAddress(cust.companyAddress || '');
+                                setContactName(cust.contactName || '');
+                                setContactDetails(cust.contactDetails || '');
+                                setContactPhone(cust.contactPhone || '');
+                                setContactEmail(cust.contactEmail || '');
+                                setPartnerCompany(cust.partnerCompany || '');
+                                if (cust.salesName) {
+                                  setSalesName(cust.salesName);
+                                }
+                                setShowCustomerSuggestions(false);
+                              }}
+                            >
+                              <div className="text-xs font-bold text-slate-800">{cust.companyName}</div>
+                              <div className="text-[10px] text-slate-500 flex justify-between">
+                                <span>ผู้ติดต่อ: {cust.contactName || '-'}</span>
+                                <span>โทร: {cust.contactPhone || '-'}</span>
+                              </div>
+                            </button>
+                          ))}
+                        {dbCustomers.filter(c => c.companyName?.toLowerCase().includes(companyName.toLowerCase())).length === 0 && (
+                          <div className="p-3 text-xs text-slate-400 text-center">ไม่พบข้อมูลในฐานข้อมูลลูกค้า (กรอกใหม่ได้เลย)</div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
